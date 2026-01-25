@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import List, Tuple, Optional, Literal
 
 from src.aegis_ai.data.schemas import User, Device, Session, LoginEvent
-from src.aegis_ai.data.synthetic_generator.base_generator import (
+from aegis_ai.data.generators.base_generator import (
     BaseGenerator,
     COUNTRIES,
     CITIES_BY_COUNTRY,
