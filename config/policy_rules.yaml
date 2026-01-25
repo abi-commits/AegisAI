@@ -1,0 +1,31 @@
+"""Example configuration file (YAML format reference)."""
+
+version: "1.0.0"
+
+# Confidence gating
+confidence:
+  min_to_allow: 0.80
+  min_to_escalate: 0.50
+  calibration_method: "isotonic"
+
+# Action constraints
+actions:
+  permanent_block_allowed: false
+  temporary_block_allowed: true
+  max_per_user_per_day: 5
+  
+# Escalation rules
+escalation:
+  disagreement_threshold: 0.3  # Agent disagreement
+  consecutive_high_risk: 3
+  force_human_review:
+    - low_confidence
+    - high_disagreement
+    - policy_violation
+
+# Model versions
+models:
+  detection: "xgboost_v2.1.0"
+  behavior: "isolation_forest_v1.0"
+  network: "gnn_v1.2.0"
+  confidence: "calibrated_ensemble_v1.0"
