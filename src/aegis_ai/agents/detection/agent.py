@@ -1,95 +1,113 @@
 """Detection Agent - identifies anomalous login behavior.
 
-Uses native tree-based models (XGBoost/LightGBM) with built-in explainability.
+Paranoid by design: flags risk signals without making decisions.
+Rules-only logic, no ML dependencies.
+
+This agent thinks. It does not act.
 """
 
-from dataclasses import dataclass, field
-from typing import List, Dict, Any
-from src.aegis_ai.models.explainability import RiskFactor
+from src.aegis_ai.data.schemas.login_event import LoginEvent
+from src.aegis_ai.data.schemas.session import Session
+from src.aegis_ai.data.schemas.device import Device
+from src.aegis_ai.agents.detection.schema import DetectionOutput
 
-
-@dataclass
-class DetectionOutput:
-    """Output from Detection Agent."""
-    risk_signal_score: float  # 0.0 to 1.0
-    risk_factors: List[RiskFactor]
-    feature_importance: Dict[str, float]  # Top features from model
-    explanation: str = ""
-    
 
 class DetectionAgent:
-    """Detection Agent Contract.
+    """Detection Agent - Paranoid by Design.
     
-    Input: LoginEvent + session features
-    Output: risk_signal_score, risk_factors, feature_importance
-    Constraint: Cannot block or decide
+    Responsibilities:
+    - Identify risk signals from login events
+    - Flag anomalous patterns
+    - Return structured risk assessment
     
-    Uses native tree explainability (no external dependencies needed).
+    Constraints:
+    - No blocking decisions
+    - No confidence claims
+    - No side effects
+    - No logging decisions
+    - No raising actions
     """
     
-    def __init__(self, model=None, explainer=None):
-        """
-        Initialize Detection Agent.
-        
-        Args:
-            model: XGBoost or LightGBM model for risk scoring
-            explainer: TreeExplainer instance for native explanations
-        """
-        self.model = model
-        self.explainer = explainer
+    # Risk weights for different signals
+    RISK_WEIGHTS = {
+        "new_device": 0.25,
+        "new_ip": 0.15,
+        "new_location": 0.30,
+        "failed_attempts": 0.10,  # per attempt, capped
+        "vpn_detected": 0.10,
+        "tor_detected": 0.35,
+        "long_time_since_login": 0.10,
+    }
     
-    def analyze(self, login_event: dict, session_features: dict) -> DetectionOutput:
-        """
-        Analyze login event and return risk signals with native explanations.
-        
-        Args:
-            login_event: LoginEvent data
-            session_features: Processed session features (as dict or array)
-            
-        Returns:
-            DetectionOutput with risk score, factors, and importances
-        """
-        raise NotImplementedError
+    # Thresholds
+    FAILED_ATTEMPTS_CAP = 3  # Max contribution from failed attempts
+    LONG_ABSENCE_HOURS = 720  # 30 days
     
-    def _extract_risk_factors(
+    def analyze(
         self,
-        feature_importance: Dict[str, float],
-        threshold: float = 0.05
-    ) -> List[RiskFactor]:
-        """
-        Extract risk factors from model feature importance.
-        
-        Maps top features to RiskFactor enum based on feature names.
+        login_event: LoginEvent,
+        session: Session,
+        device: Device
+    ) -> DetectionOutput:
+        """Analyze login event and return risk signals.
         
         Args:
-            feature_importance: Dict of feature names to importance scores
-            threshold: Minimum importance to include
+            login_event: Validated LoginEvent schema object
+            session: Validated Session schema object
+            device: Validated Device schema object
             
         Returns:
-            List of RiskFactor enums sorted by importance
+            DetectionOutput with risk_signal_score and risk_factors
         """
-        # Feature name to RiskFactor mapping
-        feature_to_factor = {
-            'is_new_device': RiskFactor.NEW_DEVICE,
-            'location_distance': RiskFactor.UNUSUAL_LOCATION,
-            'login_velocity': RiskFactor.HIGH_LOGIN_VELOCITY,
-            'failed_attempts': RiskFactor.FAILED_ATTEMPTS,
-            'impossible_travel': RiskFactor.IMPOSSIBLE_TRAVEL,
-            'is_new_ip': RiskFactor.NEW_IP,
-            'behavior_deviation': RiskFactor.BEHAVIOR_DEVIATION,
-            'network_risk': RiskFactor.NETWORK_ANOMALY,
-            'unusual_time': RiskFactor.TIME_ANOMALY,
-            'device_mismatch': RiskFactor.DEVICE_MISMATCH,
-        }
+        risk_score = 0.0
+        risk_factors: list[str] = []
         
-        factors = []
-        for feature, importance in sorted(
-            feature_importance.items(),
-            key=lambda x: x[1],
-            reverse=True
-        ):
-            if importance >= threshold:
-                if feature in feature_to_factor:
-                    factors.append(feature_to_factor[feature])
+        # New device detection
+        if login_event.is_new_device or not device.is_known:
+            risk_score += self.RISK_WEIGHTS["new_device"]
+            risk_factors.append("new_device_detected")
         
-        return factors
+        # New IP detection
+        if login_event.is_new_ip:
+            risk_score += self.RISK_WEIGHTS["new_ip"]
+            risk_factors.append("login_from_new_ip")
+        
+        # New location detection (highest weight)
+        if login_event.is_new_location:
+            risk_score += self.RISK_WEIGHTS["new_location"]
+            risk_factors.append("login_from_new_country")
+        
+        # Failed attempts velocity
+        if login_event.failed_attempts_before > 0:
+            capped_attempts = min(
+                login_event.failed_attempts_before,
+                self.FAILED_ATTEMPTS_CAP
+            )
+            risk_score += self.RISK_WEIGHTS["failed_attempts"] * capped_attempts
+            risk_factors.append(
+                f"high_login_velocity_{login_event.failed_attempts_before}_failed_attempts"
+            )
+        
+        # VPN detection
+        if session.is_vpn:
+            risk_score += self.RISK_WEIGHTS["vpn_detected"]
+            risk_factors.append("vpn_or_proxy_detected")
+        
+        # Tor detection (high risk)
+        if session.is_tor:
+            risk_score += self.RISK_WEIGHTS["tor_detected"]
+            risk_factors.append("tor_exit_node_detected")
+        
+        # Long absence
+        if login_event.time_since_last_login_hours is not None:
+            if login_event.time_since_last_login_hours > self.LONG_ABSENCE_HOURS:
+                risk_score += self.RISK_WEIGHTS["long_time_since_login"]
+                risk_factors.append("login_after_extended_absence")
+        
+        # Clamp score to [0, 1]
+        clamped_score = max(0.0, min(1.0, risk_score))
+        
+        return DetectionOutput(
+            risk_signal_score=clamped_score,
+            risk_factors=risk_factors
+        )
