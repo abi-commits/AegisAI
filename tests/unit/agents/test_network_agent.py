@@ -17,8 +17,8 @@ from src.aegis_ai.data.schemas.device import Device
 
 @pytest.fixture
 def network_agent():
-    """Create a NetworkAgent instance."""
-    return NetworkAgent()
+    """Create a NetworkAgent instance in heuristic mode."""
+    return NetworkAgent(use_gnn_model=False)
 
 
 @pytest.fixture
