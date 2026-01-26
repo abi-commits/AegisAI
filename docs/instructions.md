@@ -101,7 +101,7 @@ aegis-ai/
 ├── data/
 │   ├── schemas/
 │   ├── validators/
-│   └── synthetic_generator/
+│   └── generators/
 │
 ├── models/
 │   ├── risk_models/

@@ -17,8 +17,8 @@ from typing import List, Dict, Any
 from dataclasses import dataclass
 
 from src.aegis_ai.data.schemas import User, Device, Session, LoginEvent
-from aegis_ai.data.generators.legit_login import LegitLoginGenerator
-from aegis_ai.data.generators.ato_login import ATOLoginGenerator, ATOScenarioType
+from src.aegis_ai.data.generators.legit_login import LegitLoginGenerator
+from src.aegis_ai.data.generators.ato_login import ATOLoginGenerator, ATOScenarioType
 from src.aegis_ai.data.validators.schema_validator import validate_all
 
 

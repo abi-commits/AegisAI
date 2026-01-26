@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import List, Tuple, Optional
 
 from src.aegis_ai.data.schemas import User, Device, Session, LoginEvent
-from aegis_ai.data.generators.base_generator import BaseGenerator
+from src.aegis_ai.data.generators.base_generator import BaseGenerator
 
 
 class LegitLoginGenerator(BaseGenerator):
