@@ -18,8 +18,8 @@ from src.aegis_ai.data.schemas.user import User
 
 @pytest.fixture
 def behavior_agent():
-    """Create a BehaviorAgent instance."""
-    return BehaviorAgent()
+    """Create a BehaviorAgent instance in heuristic mode."""
+    return BehaviorAgent(use_ml_model=False)
 
 
 @pytest.fixture

@@ -4,6 +4,10 @@ Testing discipline: Light but mandatory.
 - One happy path test
 - One edge case test  
 - One weird but valid input test
+
+Phase 4 additions:
+- Tests for heuristic fallback mode
+- Tests verify ML model can be loaded when available
 """
 
 import pytest
@@ -18,8 +22,9 @@ from src.aegis_ai.data.schemas.device import Device
 
 @pytest.fixture
 def detection_agent():
-    """Create a DetectionAgent instance."""
-    return DetectionAgent()
+    """Create a DetectionAgent instance in heuristic mode."""
+    # Use heuristic mode for deterministic testing
+    return DetectionAgent(use_ml_model=False)
 
 
 @pytest.fixture

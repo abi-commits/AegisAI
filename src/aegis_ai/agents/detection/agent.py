@@ -1,10 +1,19 @@
 """Detection Agent - identifies anomalous login behavior.
 
 Paranoid by design: flags risk signals without making decisions.
-Rules-only logic, no ML dependencies.
+Supports both ML-based scoring and heuristic fallback.
 
 This agent thinks. It does not act.
+
+Phase 4: ML model replaces heuristic score calculation.
+- Same inputs (LoginEvent, Session, Device)
+- Same outputs (risk_signal_score, risk_factors)
+- Same decision boundaries (clamped to [0, 1])
+- SHAP-based factor extraction for explainability
 """
+
+from pathlib import Path
+from typing import Optional, Any
 
 from src.aegis_ai.data.schemas.login_event import LoginEvent
 from src.aegis_ai.data.schemas.session import Session
@@ -26,9 +35,14 @@ class DetectionAgent:
     - No side effects
     - No logging decisions
     - No raising actions
+    
+    ML Integration (Phase 4):
+    - Model only replaces the score, not the agent logic
+    - Agent still clamps output and emits factors
+    - Falls back to heuristic if model unavailable
     """
     
-    # Risk weights for different signals
+    # Risk weights for heuristic fallback
     RISK_WEIGHTS = {
         "new_device": 0.25,
         "new_ip": 0.15,
@@ -43,6 +57,76 @@ class DetectionAgent:
     FAILED_ATTEMPTS_CAP = 3  # Max contribution from failed attempts
     LONG_ABSENCE_HOURS = 720  # 30 days
     
+    def __init__(
+        self,
+        model_path: Optional[Path] = None,
+        use_ml_model: bool = True,
+        fallback_to_heuristic: bool = True
+    ):
+        """Initialize Detection Agent.
+        
+        Args:
+            model_path: Path to trained risk model directory
+            use_ml_model: Whether to use ML model for scoring
+            fallback_to_heuristic: Fall back to heuristic on model failure
+        """
+        self._model_path = model_path
+        self._use_ml_model = use_ml_model
+        self._fallback_to_heuristic = fallback_to_heuristic
+        
+        # Lazy-loaded ML components
+        self._risk_model: Optional[Any] = None
+        self._feature_extractor: Optional[Any] = None
+        self._shap_explainer: Optional[Any] = None
+        self._ml_initialized = False
+    
+    def _init_ml_components(self) -> bool:
+        """Initialize ML components lazily.
+        
+        Returns:
+            True if ML components initialized successfully
+        """
+        if self._ml_initialized:
+            return self._risk_model is not None
+        
+        self._ml_initialized = True
+        
+        if not self._use_ml_model or self._model_path is None:
+            return False
+        
+        try:
+            from src.aegis_ai.models.risk import (
+                GBDTRiskModel,
+                FeatureExtractor,
+                SHAPExplainer,
+                RiskModelConfig,
+            )
+            
+            # Initialize feature extractor
+            self._feature_extractor = FeatureExtractor()
+            
+            # Load risk model
+            config = RiskModelConfig(
+                feature_names=self._feature_extractor.feature_names
+            )
+            self._risk_model = GBDTRiskModel(config)
+            self._risk_model.load(self._model_path)
+            
+            # Initialize SHAP explainer
+            self._shap_explainer = SHAPExplainer(
+                model=self._risk_model.get_native_model(),
+                feature_names=self._feature_extractor.feature_names
+            )
+            
+            return True
+            
+        except Exception as e:
+            # Log error in production
+            self._risk_model = None
+            self._feature_extractor = None
+            self._shap_explainer = None
+            return False
+    
     def analyze(
         self,
         login_event: LoginEvent,
@@ -51,6 +135,8 @@ class DetectionAgent:
     ) -> DetectionOutput:
         """Analyze login event and return risk signals.
         
+        Uses ML model if available, falls back to heuristic otherwise.
+        
         Args:
             login_event: Validated LoginEvent schema object
             session: Validated Session schema object
@@ -58,6 +144,81 @@ class DetectionAgent:
             
         Returns:
             DetectionOutput with risk_signal_score and risk_factors
+        """
+        # Try ML-based scoring first
+        if self._use_ml_model and self._init_ml_components():
+            try:
+                return self._analyze_with_model(login_event, session, device)
+            except Exception:
+                if not self._fallback_to_heuristic:
+                    raise
+                # Fall through to heuristic
+        
+        # Heuristic fallback
+        return self._analyze_heuristic(login_event, session, device)
+    
+    def _analyze_with_model(
+        self,
+        login_event: LoginEvent,
+        session: Session,
+        device: Device
+    ) -> DetectionOutput:
+        """Analyze using ML model with SHAP explanations.
+        
+        Args:
+            login_event: Login event data
+            session: Session data
+            device: Device data
+            
+        Returns:
+            DetectionOutput with ML-based score and SHAP-derived factors
+        """
+        # Extract features
+        features = self._feature_extractor.extract(login_event, session, device)
+        
+        # Get prediction
+        prediction = self._risk_model.predict(features)
+        
+        # Get SHAP explanation for factor extraction
+        explanation = self._shap_explainer.explain(features)
+        
+        # Extract risk factors using SHAP
+        feature_to_factor = {
+            name: self._feature_extractor.feature_to_factor_name(name)
+            for name in self._feature_extractor.feature_names
+        }
+        risk_factors = self._shap_explainer.extract_risk_factors(
+            explanation=explanation,
+            feature_to_factor_map=feature_to_factor,
+            n_factors=5,
+            min_contribution=0.02
+        )
+        
+        # Clamp score (model already outputs calibrated probability)
+        clamped_score = max(0.0, min(1.0, prediction.score))
+        
+        return DetectionOutput(
+            risk_signal_score=clamped_score,
+            risk_factors=risk_factors
+        )
+    
+    def _analyze_heuristic(
+        self,
+        login_event: LoginEvent,
+        session: Session,
+        device: Device
+    ) -> DetectionOutput:
+        """Analyze using rule-based heuristics.
+        
+        Original Phase 3 logic preserved for fallback.
+        
+        Args:
+            login_event: Login event data
+            session: Session data
+            device: Device data
+            
+        Returns:
+            DetectionOutput with heuristic-based score and factors
         """
         risk_score = 0.0
         risk_factors: list[str] = []
