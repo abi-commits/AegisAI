@@ -1,31 +1,187 @@
-"""Example configuration file (YAML format reference)."""
+# ============================================================================
+# AegisAI Policy Rules - Runtime Governance Configuration
+# ============================================================================
 
-version: "1.0.0"
-
-# Confidence gating
-confidence:
-  min_to_allow: 0.80
-  min_to_escalate: 0.50
-  calibration_method: "isotonic"
-
-# Action constraints
-actions:
-  permanent_block_allowed: false
-  temporary_block_allowed: true
-  max_per_user_per_day: 5
+metadata:
+  version: "1.0.0"
+  last_updated: "2026-01-26"
+  author: "AegisAI Governance Team"
+  description: "Production policy rules for AegisAI fraud detection system"
   
-# Escalation rules
-escalation:
-  disagreement_threshold: 0.3  # Agent disagreement
-  consecutive_high_risk: 3
-  force_human_review:
-    - low_confidence
-    - high_disagreement
-    - policy_violation
+# ============================================================================
+# CONFIDENCE GATING - The Sacred Threshold
+# ============================================================================
+# This is the most important section. Do not modify without governance approval.
+confidence:
+  # Minimum confidence required for AI to make autonomous decision
+  min_to_allow: 0.80
+  
+  # Below this threshold, MUST escalate to human review
+  min_to_escalate: 0.50
+  
+  # Calibration method for confidence adjustment
+  calibration_method: "isotonic"
+  
+  # Maximum confidence allowed (prevents overconfidence)
+  max_confidence_cap: 0.99
 
-# Model versions
+# ============================================================================
+# ACTION CONSTRAINTS - What AI Can and Cannot Do
+# ============================================================================
+# These are hard limits. No exception. No creativity under pressure.
+actions:
+  # AI is NEVER allowed to permanently block accounts
+  # This requires human intervention without exception
+  permanent_block_allowed: false
+  
+  # AI may temporarily block suspicious sessions
+  temporary_block_allowed: true
+  
+  # Maximum temporary block duration in hours
+  max_temporary_block_hours: 24
+  
+  # Maximum actions per user per 24-hour period
+  max_actions_per_user_per_day: 5
+  
+  # Allowed action types for AI (anything else requires human)
+  allowed_actions:
+    - "ALLOW"
+    - "CHALLENGE"
+    - "BLOCK_TEMPORARY"
+    - "ESCALATE"
+  
+  # Actions that ALWAYS require human approval
+  human_only_actions:
+    - "BLOCK_PERMANENT"
+    - "ACCOUNT_TERMINATION"
+    - "LEGAL_HOLD"
+
+# ============================================================================
+# ESCALATION RULES - When to Defer to Humans
+# ============================================================================
+# These rules determine when AI restraint is required.
+escalation:
+  # Agent disagreement threshold (0-1)
+  # If agents disagree more than this, escalate
+  disagreement_threshold: 0.30
+  
+  # Number of consecutive high-risk decisions before forced escalation
+  consecutive_high_risk_limit: 3
+  
+  # Conditions that ALWAYS trigger human review
+  force_human_review:
+    - "low_confidence"
+    - "high_disagreement"
+    - "policy_violation"
+    - "repeated_failures"
+    - "unusual_pattern"
+  
+  # Priority levels for escalation queue
+  escalation_priorities:
+    critical: 1    # Immediate review required
+    high: 2        # Review within 1 hour
+    medium: 3      # Review within 4 hours
+    low: 4         # Review within 24 hours
+
+# ============================================================================
+# RISK THRESHOLDS - Score-Based Decision Boundaries
+# ============================================================================
+# These thresholds map risk scores to actions.
+risk_thresholds:
+  # Risk score below this = ALLOW
+  low_risk_max: 0.30
+  
+  # Risk score in this range = CHALLENGE
+  medium_risk_max: 0.70
+  
+  # Risk score above medium_risk_max = BLOCK or ESCALATE
+  high_risk_min: 0.70
+  
+  # Critical risk always escalates regardless of confidence
+  critical_risk_threshold: 0.95
+
+# ============================================================================
+# RATE LIMITING - Abuse Prevention
+# ============================================================================
+# Prevents any single user/IP from overwhelming the system.
+rate_limits:
+  # Maximum decisions per IP per minute
+  max_decisions_per_ip_per_minute: 10
+  
+  # Maximum failed attempts before automatic block
+  max_failed_attempts: 3
+  
+  # Lockout duration in minutes after max failed attempts
+  lockout_duration_minutes: 30
+  
+  # Maximum escalations per user per day
+  max_escalations_per_user_per_day: 5
+
+# ============================================================================
+# MODEL VERSIONS - Pinned for Auditability
+# ============================================================================
+# All model versions must be explicitly specified.
 models:
   detection: "xgboost_v2.1.0"
   behavior: "isolation_forest_v1.0"
   network: "gnn_v1.2.0"
   confidence: "calibrated_ensemble_v1.0"
+  explanation: "shap_v1.0.0"
+
+# ============================================================================
+# HUMAN OVERRIDE RULES - Authority Preservation
+# ============================================================================
+# When humans intervene, these rules apply.
+human_override:
+  # Override reason is MANDATORY (cannot be empty)
+  require_reason: true
+  
+  # Minimum reason length in characters
+  min_reason_length: 10
+  
+  # Valid override types
+  allowed_override_types:
+    - "APPROVE"           # Human approves AI recommendation
+    - "REJECT"            # Human rejects AI recommendation
+    - "MODIFY"            # Human modifies AI recommendation
+    - "DEFER"             # Human defers to later review
+  
+  # Whether to retain original AI decision in audit log
+  retain_ai_decision: true
+  
+  # Whether override impacts future model training
+  # (set to false to prevent outcome bias)
+  allow_training_feedback: false
+
+# ============================================================================
+# AUDIT CONFIGURATION - Immutability Settings
+# ============================================================================
+audit:
+  # Log format (only JSONL supported for immutability)
+  format: "jsonl"
+  
+  # Log file path pattern (date-stamped)
+  log_path_pattern: "logs/audit/aegis_audit_{date}.jsonl"
+  
+  # Append-only mode (MUST be true)
+  append_only: true
+  
+  # Log retention period in days
+  retention_days: 2555  # 7 years for regulatory compliance
+  
+  # Fields that MUST be present in every audit entry
+  required_fields:
+    - "timestamp"
+    - "decision_id"
+    - "session_id"
+    - "user_id"
+    - "action"
+    - "confidence_score"
+    - "policy_version"
+    - "decided_by"
+  
+  # Enable cryptographic hashing for integrity verification
+  enable_hash_chain: true
+  
+  # Hash algorithm for integrity verification
+  hash_algorithm: "sha256"
