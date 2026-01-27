@@ -80,13 +80,15 @@ class DistanceCalculator:
         """
         method = method or self.default_method
         
-        # Handle invalid profiles
+        # Handle invalid profiles (new users get benefit of the doubt)
+        # normalized_score is ANOMALY score: 0 = normal, 1 = anomalous
+        # For new users with no baseline, assume they are normal (low anomaly)
         if not profile.is_valid:
             return AnomalyScore(
                 distance=0.0,
-                normalized_score=0.5,  # Neutral score for new users
+                normalized_score=0.10,  # Low anomaly = normal (benefit of doubt)
                 method=method,
-                deviation_factors=["insufficient_behavioral_history"]
+                deviation_factors=["new_user_no_baseline"]
             )
         
         # Compute distance based on method

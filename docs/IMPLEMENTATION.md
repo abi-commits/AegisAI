@@ -202,8 +202,14 @@ AegisAI/
 # Main entry point
 python main.py
 
-# Example scenario
-python examples/example_ato.py
+# Run the demo (THE ONE DEMO)
+python demo.py
+
+# Run evaluation suite
+python -m src.aegis_ai.evaluation.runner
+
+# Quick evaluation
+python -m src.aegis_ai.evaluation.runner --quick
 
 # Start API server
 uvicorn src.aegis_ai.api.inference_service:app --reload
@@ -227,9 +233,59 @@ pip install -r requirements.txt
 pip install -r requirements-dev.txt
 ```
 
+---
+
+## Phase 6 — Evaluation, Demo & Shipping ✓
+
+### Evaluation Module
+**Located in**: `src/aegis_ai/evaluation/`
+
+Tracks the metrics that matter:
+- **False positive rate** — How often legitimate users are harmed
+- **Escalation rate** — How often AI exercises restraint
+- **Human override rate** — How often humans change AI decisions
+- **Confidence calibration error** — How honest AI is about uncertainty
+- **Policy violation count** — Should always be zero
+
+Run evaluation:
+```bash
+# Standard: 100 legit + 20 ATO
+python -m src.aegis_ai.evaluation.runner
+
+# Quick: 20 legit + 5 ATO
+python -m src.aegis_ai.evaluation.runner --quick
+```
+
+### The One Demo
+**Located in**: `demo.py`
+
+Shows exactly three scenarios:
+1. **Legit login → ALLOW** (silent pass-through)
+2. **Suspicious login → CHALLENGE** (step-up auth)
+3. **Ambiguous login → ESCALATE** (AI refuses, human review)
+
+The third case is the star.
+
+> "The most important decision this system makes is knowing when not to decide."
+
+### README Final Form
+**Located in**: `README.md`
+
+Reads like an internal system design doc with sections:
+- What AegisAI is
+- Why accuracy is not enough
+- Architecture & agents
+- Decision lifecycle
+- Governance & safety
+- Demo walkthrough
+- Known limitations
+- Future extensions
+
+---
+
 ## Definition of Done ✓
 
-AegisAI structure is considered complete when:
+AegisAI is **SHIPPED** when:
 
 - ✓ Repo scaffold with enterprise-grade structure
 - ✓ 5 agent modules with strict contracts
@@ -238,15 +294,28 @@ AegisAI structure is considered complete when:
 - ✓ Orchestration layer (router & flow)
 - ✓ Governance layer (audit & policies)
 - ✓ Configuration management
-- ✓ Example scenario
+- ✓ Human override system with audit logging
+- ✓ Policy engine enforcement
 - ✓ Testing framework
 - ✓ CI/CD pipeline
-- ✓ Comprehensive documentation
+- ✓ **Evaluation module with real metrics**
+- ✓ **The One Demo (3 scenarios)**
+- ✓ **README in final form**
 
-**Next steps**: Implement agent logic, models, and end-to-end decision flow.
+### Definition of "Shipped"
+
+- [x] One end-to-end ATO demo runs
+- [x] AI escalates uncertainty correctly
+- [x] Human override is logged
+- [x] Policies constrain actions
+- [x] Audit logs are reproducible
+- [x] README explains everything clearly
+
+**STOP HERE. Do not add more features.**
 
 ---
 
-**Status**: Enterprise structure ready for development  
-**Date**: January 25, 2026  
-**Version**: 0.1.0
+**Status**: SHIPPED  
+**Date**: January 27, 2026  
+**Version**: 1.0.0
+

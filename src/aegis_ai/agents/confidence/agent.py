@@ -20,17 +20,17 @@ from src.aegis_ai.models.calibration import ConfidenceCalibrator
 class ConfidenceAgent:
     """Confidence Agent - The Gatekeeper."""
     
-    # Thresholds for decision permission (CONSERVATIVE)
-    HIGH_CONFIDENCE_THRESHOLD = 0.75  # Above this = AI_ALLOWED
-    LOW_DISAGREEMENT_THRESHOLD = 0.30  # Below this = agents agree
+    # Thresholds for decision permission (BALANCED)
+    HIGH_CONFIDENCE_THRESHOLD = 0.65  # Above this = AI_ALLOWED (was 0.75)
+    LOW_DISAGREEMENT_THRESHOLD = 0.35  # Below this = agents agree (was 0.30)
     
-    # Penalties - Phase 4: More aggressive
-    MISSING_EVIDENCE_PENALTY = 0.20
-    HIGH_DISAGREEMENT_PENALTY = 0.30  # Increased from 0.25
+    # Penalties - More balanced for legitimate cases
+    MISSING_EVIDENCE_PENALTY = 0.10  # Reduced from 0.20
+    HIGH_DISAGREEMENT_PENALTY = 0.20  # Reduced from 0.30
     
-    # Overconfidence thresholds - NEW Phase 4
-    OVERCONFIDENCE_THRESHOLD = 0.90
-    OVERCONFIDENCE_PENALTY_RATE = 0.50
+    # Overconfidence thresholds
+    OVERCONFIDENCE_THRESHOLD = 0.95
+    OVERCONFIDENCE_PENALTY_RATE = 0.30
     
     def __init__(
         self,
@@ -108,10 +108,19 @@ class ConfidenceAgent:
         else:
             final_confidence = raw_confidence
         
-        # Determine decision permission (CONSERVATIVE)
+        # Check for CLEAR-CUT fraud: Detection + Behavioral agree on high risk
+        # Even if Network has no data, we can be confident in obvious fraud
+        is_clear_cut_fraud = self._is_clear_cut_fraud(
+            detection_output, behavioral_output, network_output
+        )
+        
+        # Determine decision permission (CONSERVATIVE, but pragmatic for clear fraud)
         decision_permission: Literal["AI_ALLOWED", "HUMAN_REQUIRED"]
         
-        if final_confidence >= self.HIGH_CONFIDENCE_THRESHOLD:
+        if is_clear_cut_fraud:
+            # Clear-cut fraud: AI can decide even with lower confidence
+            decision_permission = "AI_ALLOWED"
+        elif final_confidence >= self.HIGH_CONFIDENCE_THRESHOLD:
             if disagreement_score < self.LOW_DISAGREEMENT_THRESHOLD:
                 decision_permission = "AI_ALLOWED"
             else:
@@ -148,30 +157,78 @@ class ConfidenceAgent:
     ) -> float:
         """Calculate raw confidence before calibration.
         
-        This is the original Phase 3 logic, preserved for reference.
+        Confidence reflects how certain we are about the risk assessment,
+        not the risk level itself. High confidence means agents agree
+        and we have good evidence. Low confidence means uncertainty.
         """
-        # Base confidence: how certain we are about the situation
-        base_confidence = 1.0 - disagreement_score
+        # Base confidence starts high and gets penalized for problems
+        base_confidence = 0.90
         
-        # Penalize missing evidence
+        # Reduce confidence based on disagreement
+        disagreement_penalty = disagreement_score * 0.4
+        
+        # Penalize only when we have high risk but weak evidence
         evidence_penalty = 0.0
         
-        # Check for weak evidence in detection
-        if len(detection_output.risk_factors) == 0 and detection_output.risk_signal_score > 0.3:
+        # High risk + no factors = suspicious, reduce confidence
+        if detection_output.risk_signal_score > 0.5 and len(detection_output.risk_factors) == 0:
             evidence_penalty += self.MISSING_EVIDENCE_PENALTY
         
-        # Check for weak network evidence
-        if len(network_output.evidence_links) == 0 and network_output.network_risk_score > 0.3:
+        # High network risk + no evidence = suspicious, reduce confidence
+        if network_output.network_risk_score > 0.5 and len(network_output.evidence_links) == 0:
             evidence_penalty += self.MISSING_EVIDENCE_PENALTY
         
-        # Apply disagreement penalty if agents conflict
+        # High disagreement gets extra penalty
         if disagreement_score > self.LOW_DISAGREEMENT_THRESHOLD:
-            evidence_penalty += self.HIGH_DISAGREEMENT_PENALTY * disagreement_score
+            evidence_penalty += self.HIGH_DISAGREEMENT_PENALTY
+        
+        # BOOST confidence when everything looks clean and consistent
+        # Low risk + high behavioral match + agents agree = high confidence
+        agreement_boost = 0.0
+        if (detection_output.risk_signal_score < 0.3 and 
+            behavioral_output.behavioral_match_score > 0.7 and
+            network_output.network_risk_score < 0.3 and
+            disagreement_score < 0.2):
+            agreement_boost = 0.10  # Boost for clean cases
         
         # Calculate raw confidence
-        raw_confidence = max(0.0, min(1.0, base_confidence - evidence_penalty))
+        raw_confidence = base_confidence - disagreement_penalty - evidence_penalty + agreement_boost
+        raw_confidence = max(0.0, min(1.0, raw_confidence))
         
         return raw_confidence
+    
+    def _is_clear_cut_fraud(
+        self,
+        detection: DetectionOutput,
+        behavioral: BehavioralOutput,
+        network: NetworkOutput
+    ) -> bool:
+        """Check if this is a clear-cut fraud case.
+        
+        Clear-cut fraud means:
+        - Detection has very high risk (>= 0.95) with strong signals
+        - Behavioral shows significant deviations (match < 0.4)
+        - Multiple risk factors present
+        
+        Network agent missing data should NOT block obvious fraud decisions.
+        """
+        # Detection must be very confident
+        if detection.risk_signal_score < 0.95:
+            return False
+        
+        # Behavioral must show deviation (low match = suspicious)
+        if behavioral.behavioral_match_score > 0.40:
+            return False
+        
+        # Must have multiple risk factors (not just one signal)
+        if len(detection.risk_factors) < 3:
+            return False
+        
+        # Must have behavioral deviations detected
+        if not behavioral.deviation_summary or len(behavioral.deviation_summary) < 2:
+            return False
+        
+        return True
     
     def _calculate_disagreement(self, scores: list[float]) -> float:
         """Calculate disagreement score between agent outputs.

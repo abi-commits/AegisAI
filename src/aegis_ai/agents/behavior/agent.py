@@ -161,6 +161,9 @@ class BehaviorAgent:
     ) -> BehavioralOutput:
         """Analyze using profile-based anomaly detection.
         
+        If no behavioral history exists, falls back to heuristic analysis
+        which checks location, time, device against user's baseline.
+        
         Args:
             login_event: Login event data
             session: Session data
@@ -176,6 +179,23 @@ class BehaviorAgent:
             user=user,
             device=device,
         )
+        
+        # If profiler has no history (returns neutral score with insufficient history marker),
+        # use heuristic analysis which checks actual behavioral signals
+        no_history_markers = ["insufficient_behavioral_history", "new_user_no_baseline"]
+        has_no_history = any(marker in deviation_summary for marker in no_history_markers)
+        
+        if has_no_history:
+            heuristic_result = self._analyze_heuristic(
+                login_event=login_event,
+                session=session,
+                user=user,
+                device=device,
+                historical_baseline=None
+            )
+            # Use heuristic result since profiler has no data
+            match_score = heuristic_result.behavioral_match_score
+            deviation_summary = heuristic_result.deviation_summary
         
         # Update profile if configured
         if self._update_profiles:
