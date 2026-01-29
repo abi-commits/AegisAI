@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from abc import ABC, abstractmethod
 
-from src.aegis_ai.data.schemas import User, Device, Session, GeoLocation, LoginEvent
+from aegis_ai.data.schemas import User, Device, Session, GeoLocation, LoginEvent
 
 
 # Realistic data pools

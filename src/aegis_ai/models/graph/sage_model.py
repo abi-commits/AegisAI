@@ -22,7 +22,7 @@ try:
 except ImportError:
     TORCH_AVAILABLE = False
 
-from src.aegis_ai.models.graph.schema import FraudGraph
+from aegis_ai.models.graph.schema import FraudGraph
 
 
 @dataclass

@@ -3,7 +3,7 @@
 Provides deterministic policy evaluation with zero ML.
 """
 
-from src.aegis_ai.governance.policies.engine import (
+from aegis_ai.governance.policies.engine import (
     PolicyEngine,
     PolicyViolationError,
 )

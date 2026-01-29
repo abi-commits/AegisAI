@@ -9,10 +9,10 @@ Testing discipline: Light but mandatory.
 import pytest
 from datetime import datetime
 
-from src.aegis_ai.agents.network.agent import NetworkAgent
-from src.aegis_ai.agents.network.schema import NetworkOutput
-from src.aegis_ai.data.schemas.session import Session, GeoLocation
-from src.aegis_ai.data.schemas.device import Device
+from aegis_ai.agents.network.agent import NetworkAgent
+from aegis_ai.agents.network.schema import NetworkOutput
+from aegis_ai.data.schemas.session import Session, GeoLocation
+from aegis_ai.data.schemas.device import Device
 
 
 @pytest.fixture

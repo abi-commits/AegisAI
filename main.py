@@ -1,12 +1,6 @@
 #!/usr/bin/env python3
 """Main entry point for AegisAI."""
 
-import sys
-from pathlib import Path
-
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
-
 from aegis_ai.common.logging import get_logger
 from aegis_ai.common.config import Config
 

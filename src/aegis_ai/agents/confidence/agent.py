@@ -10,11 +10,11 @@ Phase 4 Upgrades:
 """
 
 from typing import Literal, Optional
-from src.aegis_ai.agents.detection.schema import DetectionOutput
-from src.aegis_ai.agents.behavior.schema import BehavioralOutput
-from src.aegis_ai.agents.network.schema import NetworkOutput
-from src.aegis_ai.agents.confidence.schema import ConfidenceOutput, CalibrationInfo
-from src.aegis_ai.models.calibration import ConfidenceCalibrator
+from aegis_ai.agents.detection.schema import DetectionOutput
+from aegis_ai.agents.behavior.schema import BehavioralOutput
+from aegis_ai.agents.network.schema import NetworkOutput
+from aegis_ai.agents.confidence.schema import ConfidenceOutput, CalibrationInfo
+from aegis_ai.models.calibration import ConfidenceCalibrator
 
 
 class ConfidenceAgent:
@@ -25,8 +25,8 @@ class ConfidenceAgent:
     LOW_DISAGREEMENT_THRESHOLD = 0.35  # Below this = agents agree (was 0.30)
     
     # Penalties - More balanced for legitimate cases
-    MISSING_EVIDENCE_PENALTY = 0.10  # Reduced from 0.20
-    HIGH_DISAGREEMENT_PENALTY = 0.20  # Reduced from 0.30
+    MISSING_EVIDENCE_PENALTY = 0.12  # Penalty when risk exists but no evidence
+    HIGH_DISAGREEMENT_PENALTY = 0.20  # Penalty for agent disagreement
     
     # Overconfidence thresholds
     OVERCONFIDENCE_THRESHOLD = 0.95
@@ -167,15 +167,15 @@ class ConfidenceAgent:
         # Reduce confidence based on disagreement
         disagreement_penalty = disagreement_score * 0.4
         
-        # Penalize only when we have high risk but weak evidence
+        # Penalize only when we have elevated risk but weak evidence
         evidence_penalty = 0.0
         
-        # High risk + no factors = suspicious, reduce confidence
-        if detection_output.risk_signal_score > 0.5 and len(detection_output.risk_factors) == 0:
+        # Elevated risk + no factors = suspicious, reduce confidence
+        if detection_output.risk_signal_score >= 0.5 and len(detection_output.risk_factors) == 0:
             evidence_penalty += self.MISSING_EVIDENCE_PENALTY
         
-        # High network risk + no evidence = suspicious, reduce confidence
-        if network_output.network_risk_score > 0.5 and len(network_output.evidence_links) == 0:
+        # Elevated network risk + no evidence = suspicious, reduce confidence
+        if network_output.network_risk_score >= 0.5 and len(network_output.evidence_links) == 0:
             evidence_penalty += self.MISSING_EVIDENCE_PENALTY
         
         # High disagreement gets extra penalty

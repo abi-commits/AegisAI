@@ -1,119 +1,102 @@
-"""Audit Logger - Immutable logging of all decisions.
+"""Audit Logger - Facade for audit logging with flexible backends.
+
+This module provides a high-level interface for audit logging,
+delegating to AuditStore implementations for actual persistence.
+
+Design principles:
+- Facade pattern for simplified API
+- Pluggable storage backends
+- Optional background writing for performance
+- Thread-safe operations
 """
 
-import hashlib
-import json
-import os
-import threading
+import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, Dict, Generator, List, Optional, Union
 
-from src.aegis_ai.governance.schemas import (
+from aegis_ai.governance.schemas import (
     AuditEntry,
     AuditEventType,
     HumanOverride,
     PolicyCheckResult,
 )
+from aegis_ai.governance.audit.store import (
+    AuditStore,
+    FileAuditStore,
+    AuditLogIntegrityError,
+)
 
 
-class AuditLogIntegrityError(Exception):
-    """Raised when audit log integrity check fails."""
-    pass
+# Re-export for backwards compatibility
+__all__ = ["AuditLogger", "AuditLogIntegrityError"]
+
+logger = logging.getLogger(__name__)
 
 
 class AuditLogger:
-    """Records all decisions immutably in JSONL format."""
+    """High-level audit logger with pluggable backends.
     
-    DEFAULT_LOG_DIR = Path(__file__).parent.parent.parent.parent.parent / "logs" / "audit"
+    This class provides a simplified interface for audit logging,
+    delegating persistence to an AuditStore implementation.
+    
+    Features:
+    - Pluggable storage backends (file, database, remote)
+    - Optional background writing for reduced latency
+    - Structured logging methods for different event types
+    - Query interface for audit trail retrieval
+    """
     
     def __init__(
         self,
+        store: Optional[AuditStore] = None,
         log_dir: Optional[str] = None,
         log_filename_pattern: str = "aegis_audit_{date}.jsonl",
         enable_hash_chain: bool = True,
         hash_algorithm: str = "sha256",
+        use_background_writer: bool = False,
     ):
         """Initialize audit logger.
         
         Args:
-            log_dir: Directory for audit logs. Uses default if not provided.
-            log_filename_pattern: Pattern for log filename. {date} is replaced.
+            store: Audit store backend. Creates FileAuditStore if not provided.
+            log_dir: Directory for audit logs (only used if store not provided).
+            log_filename_pattern: Pattern for log filename (only used if store not provided).
             enable_hash_chain: Whether to enable hash chain integrity.
             hash_algorithm: Hash algorithm for integrity checks.
+            use_background_writer: Whether to use async background writing.
         """
-        self.log_dir = Path(log_dir) if log_dir else self.DEFAULT_LOG_DIR
-        self.log_filename_pattern = log_filename_pattern
+        # Create store if not provided
+        if store is not None:
+            self._store = store
+        else:
+            self._store = FileAuditStore(
+                log_dir=log_dir,
+                log_filename_pattern=log_filename_pattern,
+                enable_hash_chain=enable_hash_chain,
+                hash_algorithm=hash_algorithm,
+            )
+        
+        # Optional background writer
+        self._background_writer: Optional["BackgroundAuditWriter"] = None
+        if use_background_writer:
+            from aegis_ai.governance.audit.background_writer import BackgroundAuditWriter
+            self._background_writer = BackgroundAuditWriter(store=self._store)
+        
+        # For backwards compatibility
         self.enable_hash_chain = enable_hash_chain
-        self.hash_algorithm = hash_algorithm
-        
-        # Thread safety
-        self._lock = threading.Lock()
-        
-        # Cache last hash for chain continuity
-        self._last_hash: Optional[str] = None
-        
-        # Ensure log directory exists
-        self.log_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Initialize hash chain from existing logs
-        if self.enable_hash_chain:
-            self._last_hash = self._get_last_hash_from_log()
+        if isinstance(self._store, FileAuditStore):
+            self.log_dir = self._store.log_dir
+            self.log_filename_pattern = self._store.log_filename_pattern
+        else:
+            self.log_dir = Path(log_dir) if log_dir else FileAuditStore.DEFAULT_LOG_DIR
+            self.log_filename_pattern = log_filename_pattern
     
-    def _get_current_log_path(self) -> Path:
-        """Get path to current day's log file.
-        
-        Returns:
-            Path to today's log file
-        """
-        today = datetime.utcnow().strftime("%Y-%m-%d")
-        filename = self.log_filename_pattern.replace("{date}", today)
-        return self.log_dir / filename
-    
-    def _get_last_hash_from_log(self) -> Optional[str]:
-        """Read the last hash from the current log file."""
-        log_path = self._get_current_log_path()
-        
-        if not log_path.exists():
-            return None
-        
-        last_hash = None
-        try:
-            with open(log_path, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        entry = json.loads(line)
-                        last_hash = entry.get("entry_hash")
-        except (json.JSONDecodeError, IOError):
-            return None
-        
-        return last_hash
-    
-    def _compute_hash(self, content: str) -> str:
-        """Compute hash of content."""
-        hasher = hashlib.new(self.hash_algorithm)
-        hasher.update(content.encode("utf-8"))
-        return hasher.hexdigest()
-    
-    def _create_hash_chain_entry(self, entry: AuditEntry) -> AuditEntry:
-        """Add hash chain fields to entry."""
-        
-        if not self.enable_hash_chain:
-            return entry
-        
-        # Create a copy with previous hash
-        entry_dict = entry.model_dump(mode="json")
-        entry_dict["previous_hash"] = self._last_hash
-        
-        # Compute hash of entry content (without entry_hash field)
-        entry_dict["entry_hash"] = None
-        content_to_hash = json.dumps(entry_dict, sort_keys=True, default=str)
-        entry_hash = self._compute_hash(content_to_hash)
-        
-        entry_dict["entry_hash"] = entry_hash
-        
-        return AuditEntry.model_validate(entry_dict)
+    def _append_entry(self, entry: AuditEntry) -> AuditEntry:
+        """Append entry using store or background writer."""
+        if self._background_writer is not None:
+            return self._background_writer.append_entry(entry)
+        return self._store.append_entry(entry)
     
     def log_decision(
         self,
@@ -128,7 +111,30 @@ class AuditLogger:
         agent_outputs: Optional[Dict[str, Any]] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> AuditEntry:
-        """Log a decision immutably."""
+        """Log a decision immutably.
+        
+        Args:
+            decision_id: Unique decision identifier
+            session_id: Associated session ID
+            user_id: Associated user ID
+            action: Action taken (ALLOW/BLOCK/CHALLENGE/ESCALATE)
+            confidence_score: Confidence score (0.0 to 1.0)
+            decided_by: Who made the decision (AI/HUMAN/POLICY)
+            policy_version: Version of policy rules used
+            policy_check_result: Policy check result if applicable
+            agent_outputs: Summary of agent outputs for traceability
+            metadata: Additional context
+            
+        Returns:
+            The created audit entry
+        """
+        # Validate confidence score range
+        if not 0.0 <= confidence_score <= 1.0:
+            logger.warning(
+                f"Confidence score {confidence_score} out of range [0, 1], clamping"
+            )
+            confidence_score = max(0.0, min(1.0, confidence_score))
+        
         entry = AuditEntry(
             event_type=AuditEventType.DECISION,
             decision_id=decision_id,
@@ -136,7 +142,7 @@ class AuditLogger:
             user_id=user_id,
             action=action,
             confidence_score=confidence_score,
-            decided_by=decided_by,  # type: ignore
+            decided_by=decided_by,  # type: ignore  # Union type requires runtime validation
             policy_version=policy_version,
             policy_check_result=policy_check_result,
             agent_outputs=agent_outputs,
@@ -169,83 +175,170 @@ class AuditLogger:
     
     def log_policy_violation(
         self,
-        session_id: str,
-        user_id: str,
-        policy_version: str,
-        policy_check_result: PolicyCheckResult,
-        proposed_action: str,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        policy_version: Optional[str] = None,
+        policy_check_result: Optional[PolicyCheckResult] = None,
+        proposed_action: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        # New parameters for UnifiedAuditTrail
+        violation_id: Optional[str] = None,
+        decision_id: Optional[str] = None,
+        violation_type: Optional[str] = None,
+        policy_rule: Optional[str] = None,
+        actual_value: Optional[Any] = None,
+        threshold_value: Optional[Any] = None,
+        severity: str = "hard_stop",
+        message: str = "",
     ) -> AuditEntry:
-        """Log a policy violation."""
-        entry = AuditEntry(
-            event_type=AuditEventType.POLICY_VIOLATION,
-            session_id=session_id,
-            user_id=user_id,
-            action=proposed_action,
-            policy_version=policy_version,
-            policy_check_result=policy_check_result,
-            decided_by="POLICY",
-            metadata={
-                "violation_count": len(policy_check_result.violations),
-                "violation_types": [v.violation_type.value for v in policy_check_result.violations],
-                **(metadata or {}),
-            },
-        )
+        """Log a policy violation.
+        
+        Supports both legacy interface and new UnifiedAuditTrail interface.
+        """
+        # Handle new parameters if provided
+        if violation_id is not None and decision_id is not None:
+            entry = AuditEntry(
+                event_type=AuditEventType.POLICY_VIOLATION,
+                decision_id=decision_id,
+                session_id=session_id or "",
+                user_id=user_id or "",
+                action=proposed_action or "BLOCK",
+                policy_version=policy_version or "",
+                decided_by="POLICY",
+                metadata={
+                    "violation_id": violation_id,
+                    "violation_type": violation_type,
+                    "policy_rule": policy_rule,
+                    "actual_value": actual_value,
+                    "threshold_value": threshold_value,
+                    "severity": severity,
+                    "message": message,
+                    **(metadata or {}),
+                },
+            )
+        else:
+            # Legacy interface
+            entry = AuditEntry(
+                event_type=AuditEventType.POLICY_VIOLATION,
+                session_id=session_id or "",
+                user_id=user_id or "",
+                action=proposed_action or "BLOCK",
+                policy_version=policy_version or "",
+                policy_check_result=policy_check_result,
+                decided_by="POLICY",
+                metadata={
+                    "violation_count": len(policy_check_result.violations) if policy_check_result else 0,
+                    "violation_types": [v.violation_type.value for v in policy_check_result.violations] if policy_check_result else [],
+                    **(metadata or {}),
+                },
+            )
         
         return self._append_entry(entry)
     
     def log_human_override(
         self,
-        human_override: HumanOverride,
-        policy_version: str,
+        human_override: Optional[HumanOverride] = None,
+        policy_version: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        # New parameters for UnifiedAuditTrail
+        override_id: Optional[str] = None,
+        original_decision_id: Optional[str] = None,
+        original_action: Optional[str] = None,
+        original_confidence: Optional[float] = None,
+        new_action: Optional[str] = None,
+        override_type: Optional[str] = None,
+        reason: Optional[str] = None,
+        reviewer_id: Optional[str] = None,
+        reviewer_role: Optional[str] = None,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
     ) -> AuditEntry:
-        """Log a human override."""
-        entry = AuditEntry(
-            event_type=AuditEventType.HUMAN_OVERRIDE,
-            decision_id=human_override.original_decision_id,
-            session_id=human_override.session_id,
-            user_id=human_override.user_id,
-            action=human_override.new_action,
-            decided_by="HUMAN",
-            policy_version=policy_version,
-            human_override=human_override,
-            metadata={
-                "original_action": human_override.original_action,
-                "original_confidence": human_override.original_confidence,
-                "override_type": human_override.override_type.value,
-                "reviewer_id": human_override.reviewer_id,
-                "reviewer_role": human_override.reviewer_role,
-                **(metadata or {}),
-            },
-        )
+        """Log a human override.
+        
+        Supports both legacy interface and new UnifiedAuditTrail interface.
+        """
+        if override_id is not None and original_decision_id is not None:
+            # New unified interface
+            entry = AuditEntry(
+                event_type=AuditEventType.HUMAN_OVERRIDE,
+                decision_id=original_decision_id,
+                session_id=session_id or "",
+                user_id=user_id or "",
+                action=new_action or original_action or "MODIFIED",
+                decided_by="HUMAN",
+                policy_version=policy_version or "",
+                metadata={
+                    "override_id": override_id,
+                    "original_action": original_action,
+                    "new_action": new_action,
+                    "original_confidence": original_confidence,
+                    "override_type": override_type,
+                    "reason": reason,
+                    "reviewer_id": reviewer_id,
+                    "reviewer_role": reviewer_role,
+                    **(metadata or {}),
+                },
+            )
+        else:
+            # Legacy interface with HumanOverride object
+            entry = AuditEntry(
+                event_type=AuditEventType.HUMAN_OVERRIDE,
+                decision_id=human_override.original_decision_id if human_override else "",
+                session_id=human_override.session_id if human_override else "",
+                user_id=human_override.user_id if human_override else "",
+                action=human_override.new_action if human_override else "",
+                decided_by="HUMAN",
+                policy_version=policy_version or "",
+                human_override=human_override,
+                metadata={
+                    "original_action": human_override.original_action if human_override else "",
+                    "original_confidence": human_override.original_confidence if human_override else 0.0,
+                    "override_type": human_override.override_type.value if human_override else "",
+                    "reviewer_id": human_override.reviewer_id if human_override else "",
+                    "reviewer_role": human_override.reviewer_role if human_override else "",
+                    **(metadata or {}),
+                },
+            )
         
         return self._append_entry(entry)
     
     def log_escalation(
         self,
-        decision_id: str,
-        session_id: str,
-        user_id: str,
-        escalation_reason: str,
-        confidence_score: float,
-        policy_version: str,
+        decision_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        escalation_reason: Optional[str] = None,
+        confidence_score: Optional[float] = None,
+        policy_version: Optional[str] = None,
         agent_outputs: Optional[Dict[str, Any]] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        # New parameters for UnifiedAuditTrail
+        escalation_type: Optional[str] = None,
+        reason: Optional[str] = None,
+        escalated_to: Optional[str] = None,
     ) -> AuditEntry:
-        """Log an escalation to human review."""
+        """Log an escalation to human review.
+        
+        Supports both legacy and new UnifiedAuditTrail interfaces.
+        """
+        # Normalize parameters
+        esc_reason = escalation_reason or reason or "Manual escalation"
+        esc_type = escalation_type or "MANUAL"
+        
         entry = AuditEntry(
             event_type=AuditEventType.ESCALATION,
-            decision_id=decision_id,
-            session_id=session_id,
-            user_id=user_id,
+            decision_id=decision_id or "",
+            session_id=session_id or "",
+            user_id=user_id or "",
             action="ESCALATE",
-            confidence_score=confidence_score,
+            confidence_score=confidence_score or 0.5,
             decided_by="AI",
-            policy_version=policy_version,
+            policy_version=policy_version or "",
             agent_outputs=agent_outputs,
             metadata={
-                "escalation_reason": escalation_reason,
+                "escalation_reason": esc_reason,
+                "escalation_type": esc_type,
+                "escalated_to": escalated_to,
                 **(metadata or {}),
             },
         )
@@ -270,25 +363,6 @@ class AuditLogger:
         
         return self._append_entry(entry)
     
-    def _append_entry(self, entry: AuditEntry) -> AuditEntry:
-        """Append entry to log file (thread-safe)."""
-        with self._lock:
-            # Add hash chain
-            entry = self._create_hash_chain_entry(entry)
-            
-            # Get current log file
-            log_path = self._get_current_log_path()
-            
-            # Append to file (never overwrite)
-            with open(log_path, "a") as f:
-                f.write(entry.to_jsonl() + "\n")
-            
-            # Update last hash for chain continuity
-            if self.enable_hash_chain:
-                self._last_hash = entry.entry_hash
-            
-            return entry
-    
     def get_entries(
         self,
         date: Optional[str] = None,
@@ -298,136 +372,57 @@ class AuditLogger:
         user_id: Optional[str] = None,
     ) -> Generator[AuditEntry, None, None]:
         """Retrieve audit entries with optional filtering."""
-        if date is None:
-            date = datetime.utcnow().strftime("%Y-%m-%d")
-        
-        filename = self.log_filename_pattern.replace("{date}", date)
-        log_path = self.log_dir / filename
-        
-        if not log_path.exists():
-            return
-        
-        with open(log_path, "r") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                
-                try:
-                    entry = AuditEntry.from_jsonl(line)
-                    
-                    # Apply filters
-                    if event_type and entry.event_type != event_type:
-                        continue
-                    if decision_id and entry.decision_id != decision_id:
-                        continue
-                    if session_id and entry.session_id != session_id:
-                        continue
-                    if user_id and entry.user_id != user_id:
-                        continue
-                    
-                    yield entry
-                except (json.JSONDecodeError, ValueError):
-                    # Skip malformed entries
-                    continue
+        return self._store.get_entries(
+            date=date,
+            event_type=event_type,
+            decision_id=decision_id,
+            session_id=session_id,
+            user_id=user_id,
+        )
     
     def get_decision_history(self, decision_id: str) -> List[AuditEntry]:
         """Get all entries related to a decision."""
         entries = []
         
-        # Search all log files
-        for log_file in sorted(self.log_dir.glob("*.jsonl")):
-            with open(log_file, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    
-                    try:
-                        entry = AuditEntry.from_jsonl(line)
-                        if entry.decision_id == decision_id:
-                            entries.append(entry)
-                    except (json.JSONDecodeError, ValueError):
-                        continue
+        # Search all log files if using FileAuditStore
+        if isinstance(self._store, FileAuditStore):
+            for log_file in sorted(self._store.get_log_files()):
+                # Extract date from filename
+                date_str = log_file.stem.replace("aegis_audit_", "")
+                for entry in self._store.get_entries(
+                    date=date_str, decision_id=decision_id
+                ):
+                    entries.append(entry)
+        else:
+            # For other stores, search current date only
+            for entry in self._store.get_entries(decision_id=decision_id):
+                entries.append(entry)
         
         return sorted(entries, key=lambda e: e.timestamp)
     
     def verify_integrity(self, date: Optional[str] = None) -> bool:
         """Verify hash chain integrity of log file."""
-        if not self.enable_hash_chain:
-            return True
-        
-        if date is None:
-            date = datetime.utcnow().strftime("%Y-%m-%d")
-        
-        filename = self.log_filename_pattern.replace("{date}", date)
-        log_path = self.log_dir / filename
-        
-        if not log_path.exists():
-            return True  # Empty log is valid
-        
-        previous_hash = None
-        line_number = 0
-        
-        with open(log_path, "r") as f:
-            for line in f:
-                line_number += 1
-                line = line.strip()
-                if not line:
-                    continue
-                
-                try:
-                    entry_dict = json.loads(line)
-                    
-                    # Check previous hash matches
-                    if entry_dict.get("previous_hash") != previous_hash:
-                        raise AuditLogIntegrityError(
-                            f"Hash chain broken at line {line_number}. "
-                            f"Expected previous_hash={previous_hash}, "
-                            f"got {entry_dict.get('previous_hash')}"
-                        )
-                    
-                    # Verify entry hash
-                    stored_hash = entry_dict.get("entry_hash")
-                    entry_dict["entry_hash"] = None
-                    content_to_hash = json.dumps(entry_dict, sort_keys=True, default=str)
-                    computed_hash = self._compute_hash(content_to_hash)
-                    
-                    if computed_hash != stored_hash:
-                        raise AuditLogIntegrityError(
-                            f"Entry hash mismatch at line {line_number}. "
-                            f"Entry may have been tampered with."
-                        )
-                    
-                    previous_hash = stored_hash
-                    
-                except json.JSONDecodeError as e:
-                    raise AuditLogIntegrityError(
-                        f"Malformed JSON at line {line_number}: {e}"
-                    )
-        
-        return True
-    
+        return self._store.verify_integrity(date=date)
     def get_log_files(self) -> List[Path]:
         """Get list of all audit log files."""
-        return sorted(self.log_dir.glob("*.jsonl"))
+        if isinstance(self._store, FileAuditStore):
+            return self._store.get_log_files()
+        return []
     
     def get_entry_count(self, date: Optional[str] = None) -> int:
         """Get count of entries in log file."""
-        if date is None:
-            date = datetime.utcnow().strftime("%Y-%m-%d")
-        
-        filename = self.log_filename_pattern.replace("{date}", date)
-        log_path = self.log_dir / filename
-        
-        if not log_path.exists():
-            return 0
-        
-        count = 0
-        with open(log_path, "r") as f:
-            for line in f:
-                if line.strip():
-                    count += 1
-        
-        return count
+        if isinstance(self._store, FileAuditStore):
+            return self._store.get_entry_count(date=date)
+        # For other stores, count by iterating
+        return sum(1 for _ in self.get_entries(date=date))
+    
+    def shutdown(self) -> None:
+        """Shutdown the logger and flush any pending writes."""
+        if self._background_writer is not None:
+            self._background_writer.shutdown()
+    
+    @property
+    def store(self) -> AuditStore:
+        """Get the underlying audit store."""
+        return self._store
 

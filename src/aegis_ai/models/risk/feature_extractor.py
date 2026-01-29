@@ -11,9 +11,9 @@ from typing import Optional
 
 import numpy as np
 
-from src.aegis_ai.data.schemas.login_event import LoginEvent
-from src.aegis_ai.data.schemas.session import Session
-from src.aegis_ai.data.schemas.device import Device
+from aegis_ai.data.schemas.login_event import LoginEvent
+from aegis_ai.data.schemas.session import Session
+from aegis_ai.data.schemas.device import Device
 
 
 @dataclass

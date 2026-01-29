@@ -11,18 +11,24 @@ Design principles:
 - Single responsibility: decide or escalate
 - Confidence gate is immutable
 - All decisions are traced back to agent outputs
+- Agent failures result in escalation, not server errors
 """
 
-from typing import Literal
+import logging
+from typing import Literal, Optional
+from datetime import datetime, timezone
 
-from src.aegis_ai.orchestration.decision_context import (
+from aegis_ai.orchestration.decision_context import (
     InputContext,
     DecisionContext,
     AgentOutputs,
     FinalDecision,
     EscalationCase
 )
-from src.aegis_ai.orchestration.agent_router import AgentRouter, RouterResult
+from aegis_ai.orchestration.agent_router import AgentRouter, RouterResult, AgentError
+
+
+logger = logging.getLogger(__name__)
 
 
 class DecisionFlow:
@@ -34,15 +40,23 @@ class DecisionFlow:
     3. Apply confidence gate
     4. Decide or escalate
     5. Return immutable decision context
+    
+    Error Handling:
+    - Agent failures result in escalation, not server errors
+    - All paths produce a valid DecisionContext
     """
     
     # Action thresholds based on risk
     HIGH_RISK_THRESHOLD = 0.70  # Above this = BLOCK consideration
     MEDIUM_RISK_THRESHOLD = 0.40  # Above this = CHALLENGE consideration
     
-    def __init__(self):
-        """Initialize decision flow with router."""
-        self.router = AgentRouter()
+    def __init__(self, router: Optional[AgentRouter] = None):
+        """Initialize decision flow with router.
+        
+        Args:
+            router: Agent router. Creates default if not provided.
+        """
+        self.router = router or AgentRouter()
     
     def process(self, input_context: InputContext) -> DecisionContext:
         """Process a login event through the full decision pipeline.
@@ -51,7 +65,8 @@ class DecisionFlow:
             input_context: Validated input context
             
         Returns:
-            Complete DecisionContext with decision or escalation
+            Complete DecisionContext with decision or escalation.
+            Never raises - agent failures result in escalation.
         """
         # Create the decision context spine
         context = DecisionContext.create(input_context)
@@ -60,11 +75,15 @@ class DecisionFlow:
         router_result = self.router.route(input_context)
         
         if not router_result.success or router_result.outputs is None:
-            # Agent failures -> escalate to human
-            errors = router_result.errors or []
-            raise RuntimeError(
-                f"Agent routing failed: {[e.error_message for e in errors]}"
+            # Agent failures -> escalate to human (not server error)
+            logger.warning(
+                "Agent routing failed, escalating to human review",
+                extra={
+                    "session_id": input_context.session.session_id,
+                    "errors": [e.agent_name for e in (router_result.errors or [])],
+                }
             )
+            return self._handle_agent_failure(context, input_context, router_result.errors or [])
         
         # Enrich context with agent outputs (guaranteed non-None after check above)
         agent_outputs = router_result.outputs
@@ -101,6 +120,66 @@ class DecisionFlow:
         
         return context
     
+    def _handle_agent_failure(
+        self,
+        context: DecisionContext,
+        input_context: InputContext,
+        errors: list[AgentError],
+    ) -> DecisionContext:
+        """Handle agent failures by creating an escalation.
+        
+        Instead of raising RuntimeError (causing 500), we create an
+        escalation case and return a valid response.
+        
+        Args:
+            context: The decision context being built
+            input_context: Original input
+            errors: List of agent errors
+            
+        Returns:
+            DecisionContext with escalation decision
+        """
+        # Build error summary for explanation
+        error_summary = "; ".join(
+            f"{e.agent_name}: {e.error_type}" for e in errors
+        ) if errors else "Unknown agent failure"
+        
+        # Create a minimal escalation case without agent outputs
+        from uuid import uuid4
+        
+        escalation = EscalationCase(
+            case_id=f"esc_{uuid4().hex[:12]}",
+            timestamp=datetime.now(timezone.utc),
+            session_id=input_context.session.session_id,
+            user_id=input_context.user.user_id,
+            reason="LOW_CONFIDENCE",  # Agent failure = can't compute confidence
+            confidence_score=0.0,
+            disagreement_score=1.0,  # Maximum uncertainty
+            detection_factors=("Agent processing failed",),
+            behavioral_deviations=(),
+            network_evidence=(),
+        )
+        context = context.with_escalation(escalation)
+        
+        # Create decision record for the escalation
+        decision = FinalDecision(
+            decision_id=f"dec_{uuid4().hex[:12]}",
+            timestamp=datetime.now(timezone.utc),
+            action="ESCALATE",
+            decided_by="HUMAN_REQUIRED",
+            confidence_score=0.0,
+            explanation=f"System escalation due to processing error: {error_summary}. Human review required.",
+            session_id=input_context.session.session_id,
+            user_id=input_context.user.user_id,
+            detection_score=0.0,
+            behavioral_score=0.0,
+            network_score=0.0,
+            disagreement_score=1.0,
+        )
+        context = context.with_decision(decision)
+        
+        return context
+    
     def _make_decision(
         self,
         input_context: InputContext,
@@ -111,7 +190,16 @@ class DecisionFlow:
         Only called when confidence gate allows AI to decide.
         """
         # Use the explanation agent's recommended action as base
-        recommended = agent_outputs.explanation.recommended_action.upper()
+        recommended_action = agent_outputs.explanation.recommended_action
+        
+        # Validate and normalize the recommended action
+        if recommended_action is None:
+            logger.warning(
+                "Explanation agent returned None recommended_action, defaulting to CHALLENGE"
+            )
+            recommended = "CHALLENGE"
+        else:
+            recommended = str(recommended_action).upper()
         
         # Map to final action
         action: Literal["ALLOW", "BLOCK", "CHALLENGE", "ESCALATE"]
@@ -124,13 +212,21 @@ class DecisionFlow:
             action = "ALLOW"
         else:
             # Unknown recommendation -> challenge to be safe
+            logger.warning(
+                f"Unknown recommended action '{recommended}', defaulting to CHALLENGE"
+            )
             action = "CHALLENGE"
+        
+        # Get explanation text safely
+        explanation_text = agent_outputs.explanation.explanation_text
+        if not explanation_text:
+            explanation_text = f"Decision: {action} based on risk analysis."
         
         return FinalDecision.create(
             action=action,
             decided_by="AI",
             confidence_score=agent_outputs.confidence.final_confidence,
-            explanation=agent_outputs.explanation.explanation_text,
+            explanation=explanation_text,
             session_id=input_context.session.session_id,
             user_id=input_context.user.user_id,
             agent_outputs=agent_outputs
@@ -168,10 +264,10 @@ class DecisionFlow:
 def demo_decision_flow():
     """Demonstrate the complete decision flow with 3 scenarios."""
     from datetime import datetime
-    from src.aegis_ai.data.schemas.login_event import LoginEvent
-    from src.aegis_ai.data.schemas.session import Session, GeoLocation
-    from src.aegis_ai.data.schemas.device import Device
-    from src.aegis_ai.data.schemas.user import User
+    from aegis_ai.data.schemas.login_event import LoginEvent
+    from aegis_ai.data.schemas.session import Session, GeoLocation
+    from aegis_ai.data.schemas.device import Device
+    from aegis_ai.data.schemas.user import User
     
     print("=" * 70)
     print("AEGISAI DECISION FLOW DEMO")

@@ -14,11 +14,11 @@ from typing import Optional, List, Dict, Tuple
 
 import numpy as np
 
-from src.aegis_ai.data.schemas.session import Session
-from src.aegis_ai.data.schemas.device import Device
-from src.aegis_ai.agents.network.schema import NetworkOutput
-from src.aegis_ai.models.graph.builder import GraphBuilder
-from src.aegis_ai.models.graph.schema import NodeType
+from aegis_ai.data.schemas.session import Session
+from aegis_ai.data.schemas.device import Device
+from aegis_ai.agents.network.schema import NetworkOutput
+from aegis_ai.models.graph.builder import GraphBuilder
+from aegis_ai.models.graph.schema import NodeType
 
 
 class NetworkAgent:
@@ -86,7 +86,7 @@ class NetworkAgent:
             return False
         
         try:
-            from src.aegis_ai.models.graph.sage_model import GraphSAGEModel
+            from aegis_ai.models.graph.sage_model import GraphSAGEModel
             self._gnn_model = GraphSAGEModel()
             return True
         except Exception:

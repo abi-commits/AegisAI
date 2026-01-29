@@ -17,19 +17,19 @@ Design principles:
 - No model can bypass governance
 """
 
-from src.aegis_ai.governance.audit.logger import (
+from aegis_ai.governance.audit.logger import (
     AuditLogger,
     AuditLogIntegrityError,
 )
-from src.aegis_ai.governance.policies.engine import (
+from aegis_ai.governance.policies.engine import (
     PolicyEngine,
     PolicyViolationError,
 )
-from src.aegis_ai.governance.override import (
+from aegis_ai.governance.override import (
     HumanOverrideHandler,
     HumanOverrideError,
 )
-from src.aegis_ai.governance.schemas import (
+from aegis_ai.governance.schemas import (
     AuditEntry,
     AuditEventType,
     HumanOverride,

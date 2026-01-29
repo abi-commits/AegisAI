@@ -10,11 +10,11 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from src.aegis_ai.governance.audit.logger import (
+from aegis_ai.governance.audit.logger import (
     AuditLogger,
     AuditLogIntegrityError,
 )
-from src.aegis_ai.governance.schemas import (
+from aegis_ai.governance.schemas import (
     AuditEntry,
     AuditEventType,
     HumanOverride,
@@ -166,7 +166,7 @@ class TestPolicyLogging:
     
     def test_log_policy_violation(self, audit_logger):
         """Test logging a policy violation."""
-        from src.aegis_ai.governance.schemas import PolicyViolation, PolicyViolationType
+        from aegis_ai.governance.schemas import PolicyViolation, PolicyViolationType
         
         violation = PolicyViolation(
             violation_type=PolicyViolationType.CONFIDENCE_TOO_LOW,

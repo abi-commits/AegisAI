@@ -7,11 +7,11 @@ Phase 4 Upgrades:
 """
 
 from typing import Any, Literal, Optional
-from src.aegis_ai.agents.detection.schema import DetectionOutput
-from src.aegis_ai.agents.behavior.schema import BehavioralOutput
-from src.aegis_ai.agents.network.schema import NetworkOutput
-from src.aegis_ai.agents.confidence.schema import ConfidenceOutput
-from src.aegis_ai.agents.explanation.schema import (
+from aegis_ai.agents.detection.schema import DetectionOutput
+from aegis_ai.agents.behavior.schema import BehavioralOutput
+from aegis_ai.agents.network.schema import NetworkOutput
+from aegis_ai.agents.confidence.schema import ConfidenceOutput
+from aegis_ai.agents.explanation.schema import (
     ExplanationOutput,
     SHAPContribution,
     BehavioralDeviation,

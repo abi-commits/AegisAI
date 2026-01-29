@@ -8,19 +8,19 @@ Components:
 - DecisionFlow: The only place decisions happen
 """
 
-from src.aegis_ai.orchestration.decision_context import (
+from aegis_ai.orchestration.decision_context import (
     InputContext,
     AgentOutputs,
     FinalDecision,
     EscalationCase,
     DecisionContext,
 )
-from src.aegis_ai.orchestration.agent_router import (
+from aegis_ai.orchestration.agent_router import (
     AgentRouter,
     AgentError,
     RouterResult,
 )
-from src.aegis_ai.orchestration.decision_flow import DecisionFlow
+from aegis_ai.orchestration.decision_flow import DecisionFlow
 
 __all__ = [
     # Decision Context (the spine)

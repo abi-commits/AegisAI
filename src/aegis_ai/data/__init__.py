@@ -1,6 +1,6 @@
 """Data layer - schemas, validators, generators."""
 
-from src.aegis_ai.data.schemas import (
+from aegis_ai.data.schemas import (
     User,
     Device,
     Session,

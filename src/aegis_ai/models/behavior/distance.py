@@ -10,8 +10,8 @@ from typing import Optional
 
 import numpy as np
 
-from src.aegis_ai.models.behavior.profile import BehavioralProfile, SessionEmbedding
-from src.aegis_ai.models.behavior.config import BehaviorConfig
+from aegis_ai.models.behavior.profile import BehavioralProfile, SessionEmbedding
+from aegis_ai.models.behavior.config import BehaviorConfig
 
 
 class DistanceMethod(str, Enum):
@@ -80,7 +80,6 @@ class DistanceCalculator:
         """
         method = method or self.default_method
         
-        # Handle invalid profiles (new users get benefit of the doubt)
         # normalized_score is ANOMALY score: 0 = normal, 1 = anomalous
         # For new users with no baseline, assume they are normal (low anomaly)
         if not profile.is_valid:

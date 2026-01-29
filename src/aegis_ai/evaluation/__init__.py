@@ -8,8 +8,8 @@ Track what matters:
 - Policy violation count
 """
 
-from src.aegis_ai.evaluation.metrics import EvaluationMetrics
-from src.aegis_ai.evaluation.runner import (
+from aegis_ai.evaluation.metrics import EvaluationMetrics
+from aegis_ai.evaluation.runner import (
     EvaluationRunner,
     run_standard_evaluation,
     run_quick_evaluation,

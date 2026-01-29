@@ -8,13 +8,13 @@ Phase 4 additions:
 - ConfidenceCalibrator: Disagreement-aware confidence adjustment
 """
 
-from src.aegis_ai.models.calibration.isotonic import (
+from aegis_ai.models.calibration.isotonic import (
     IsotonicCalibrator,
     CalibrationMetrics,
     calibration_curve,
 )
-from src.aegis_ai.models.calibration.platt import PlattCalibrator
-from src.aegis_ai.models.calibration.confidence import (
+from aegis_ai.models.calibration.platt import PlattCalibrator
+from aegis_ai.models.calibration.confidence import (
     ConfidenceCalibrator,
     CalibrationResult,
     EscalationMetrics,

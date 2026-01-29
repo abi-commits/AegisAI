@@ -12,20 +12,15 @@ Narrative line:
 "The most important decision this system makes is knowing when not to decide."
 """
 
-import sys
-from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent))
-
-from src.aegis_ai.data.schemas import User, Device, Session, LoginEvent, GeoLocation
-from src.aegis_ai.orchestration.decision_context import InputContext
-from src.aegis_ai.orchestration.decision_flow import DecisionFlow
-from src.aegis_ai.governance.audit.logger import AuditLogger
-from src.aegis_ai.governance.schemas import PolicyRules
-from src.aegis_ai.governance.override import HumanOverrideHandler, OverrideType
+from aegis_ai.data.schemas import User, Device, Session, LoginEvent, GeoLocation
+from aegis_ai.orchestration.decision_context import InputContext
+from aegis_ai.orchestration.decision_flow import DecisionFlow
+from aegis_ai.governance.audit.logger import AuditLogger
+from aegis_ai.governance.schemas import PolicyRules
+from aegis_ai.governance.override import HumanOverrideHandler, OverrideType
 
 
 def print_banner():
@@ -343,7 +338,7 @@ def simulate_human_override(decision_context, audit_logger: AuditLogger):
     print()
     
     # Load policy rules
-    from src.aegis_ai.governance.policies.engine import PolicyEngine
+    from aegis_ai.governance.policies.engine import PolicyEngine
     policy_engine = PolicyEngine()
     
     # Create override handler

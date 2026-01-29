@@ -17,7 +17,7 @@ import pickle
 
 import numpy as np
 
-from src.aegis_ai.models.risk.base import (
+from aegis_ai.models.risk.base import (
     RiskModel,
     RiskModelConfig,
     RiskPrediction,

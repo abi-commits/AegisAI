@@ -13,17 +13,17 @@ from datetime import datetime
 from pathlib import Path
 import tempfile
 
-from src.aegis_ai.data.schemas.login_event import LoginEvent
-from src.aegis_ai.data.schemas.session import Session, GeoLocation
-from src.aegis_ai.data.schemas.device import Device
-from src.aegis_ai.models.risk.feature_extractor import (
+from aegis_ai.data.schemas.login_event import LoginEvent
+from aegis_ai.data.schemas.session import Session, GeoLocation
+from aegis_ai.data.schemas.device import Device
+from aegis_ai.models.risk.feature_extractor import (
     FeatureExtractor,
     FeatureConfig,
     FEATURE_NAMES,
 )
-from src.aegis_ai.models.risk.base import RiskModelConfig, ModelType
-from src.aegis_ai.models.risk.gbdt_model import GBDTRiskModel
-from src.aegis_ai.models.calibration.isotonic import IsotonicCalibrator
+from aegis_ai.models.risk.base import RiskModelConfig, ModelType
+from aegis_ai.models.risk.gbdt_model import GBDTRiskModel
+from aegis_ai.models.calibration.isotonic import IsotonicCalibrator
 
 
 @pytest.fixture
@@ -378,7 +378,7 @@ class TestSHAPExplainer:
     
     def test_shap_explainer_creation(self, trained_model_with_data):
         """SHAP explainer should be created from trained model."""
-        from src.aegis_ai.models.risk.shap_explainer import SHAPExplainer
+        from aegis_ai.models.risk.shap_explainer import SHAPExplainer
         
         model, X, feature_names = trained_model_with_data
         
@@ -391,7 +391,7 @@ class TestSHAPExplainer:
     
     def test_shap_explain_single(self, trained_model_with_data):
         """SHAP should explain a single prediction."""
-        from src.aegis_ai.models.risk.shap_explainer import SHAPExplainer
+        from aegis_ai.models.risk.shap_explainer import SHAPExplainer
         
         model, X, feature_names = trained_model_with_data
         
@@ -408,7 +408,7 @@ class TestSHAPExplainer:
     
     def test_shap_top_contributors(self, trained_model_with_data):
         """SHAP should identify top contributing features."""
-        from src.aegis_ai.models.risk.shap_explainer import SHAPExplainer
+        from aegis_ai.models.risk.shap_explainer import SHAPExplainer
         
         model, X, feature_names = trained_model_with_data
         
@@ -429,7 +429,7 @@ class TestSHAPExplainer:
     
     def test_shap_global_importance(self, trained_model_with_data):
         """SHAP should compute global feature importance."""
-        from src.aegis_ai.models.risk.shap_explainer import SHAPExplainer
+        from aegis_ai.models.risk.shap_explainer import SHAPExplainer
         
         model, X, feature_names = trained_model_with_data
         
@@ -447,7 +447,7 @@ class TestSHAPExplainer:
     
     def test_shap_extract_risk_factors(self, trained_model_with_data):
         """SHAP should extract human-readable risk factors."""
-        from src.aegis_ai.models.risk.shap_explainer import SHAPExplainer
+        from aegis_ai.models.risk.shap_explainer import SHAPExplainer
         
         model, X, feature_names = trained_model_with_data
         

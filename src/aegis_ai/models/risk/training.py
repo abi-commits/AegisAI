@@ -11,14 +11,14 @@ from dataclasses import dataclass
 import numpy as np
 from sklearn.model_selection import train_test_split
 
-from src.aegis_ai.models.risk import (
+from aegis_ai.models.risk import (
     GBDTRiskModel,
     RiskModelConfig,
     FeatureExtractor,
     FeatureConfig,
 )
-from src.aegis_ai.models.risk.base import ModelType
-from src.aegis_ai.models.calibration import IsotonicCalibrator, CalibrationMetrics
+from aegis_ai.models.risk.base import ModelType
+from aegis_ai.models.calibration import IsotonicCalibrator, CalibrationMetrics
 
 
 @dataclass

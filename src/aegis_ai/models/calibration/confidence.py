@@ -22,8 +22,8 @@ import pickle
 import numpy as np
 
 if TYPE_CHECKING:
-    from src.aegis_ai.models.calibration.isotonic import IsotonicCalibrator
-    from src.aegis_ai.models.calibration.platt import PlattCalibrator
+    from aegis_ai.models.calibration.isotonic import IsotonicCalibrator
+    from aegis_ai.models.calibration.platt import PlattCalibrator
 
 
 @dataclass

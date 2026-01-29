@@ -15,10 +15,10 @@ Phase 4: ML model replaces heuristic score calculation.
 from pathlib import Path
 from typing import Optional, Any
 
-from src.aegis_ai.data.schemas.login_event import LoginEvent
-from src.aegis_ai.data.schemas.session import Session
-from src.aegis_ai.data.schemas.device import Device
-from src.aegis_ai.agents.detection.schema import DetectionOutput
+from aegis_ai.data.schemas.login_event import LoginEvent
+from aegis_ai.data.schemas.session import Session
+from aegis_ai.data.schemas.device import Device
+from aegis_ai.agents.detection.schema import DetectionOutput
 
 
 class DetectionAgent:
@@ -95,7 +95,7 @@ class DetectionAgent:
             return False
         
         try:
-            from src.aegis_ai.models.risk import (
+            from aegis_ai.models.risk import (
                 GBDTRiskModel,
                 FeatureExtractor,
                 SHAPExplainer,

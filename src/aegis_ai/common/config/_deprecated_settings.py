@@ -12,7 +12,7 @@ class Config:
     
     # Environment
     environment: str = os.getenv("ENVIRONMENT", "development")
-    debug: bool = os.getenv("DEBUG", "true").lower() == "true"
+    debug: bool = os.getenv("DEBUG", "false").lower() == "true"
     
     # Paths
     project_root: Path = field(default_factory=lambda: Path(__file__).parent.parent.parent.parent)

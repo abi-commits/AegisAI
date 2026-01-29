@@ -11,21 +11,21 @@ import math
 
 import numpy as np
 
-from src.aegis_ai.data.schemas.login_event import LoginEvent
-from src.aegis_ai.data.schemas.session import Session
-from src.aegis_ai.data.schemas.user import User
-from src.aegis_ai.data.schemas.device import Device
-from src.aegis_ai.models.behavior.profile import (
+from aegis_ai.data.schemas.login_event import LoginEvent
+from aegis_ai.data.schemas.session import Session
+from aegis_ai.data.schemas.user import User
+from aegis_ai.data.schemas.device import Device
+from aegis_ai.models.behavior.profile import (
     BehavioralProfile,
     ProfileConfig,
     SessionEmbedding,
 )
-from src.aegis_ai.models.behavior.distance import (
+from aegis_ai.models.behavior.distance import (
     DistanceCalculator,
     DistanceMethod,
     AnomalyScore,
 )
-from src.aegis_ai.models.behavior.config import BehaviorConfig
+from aegis_ai.models.behavior.config import BehaviorConfig
 
 
 class SessionEmbedder:

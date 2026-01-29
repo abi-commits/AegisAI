@@ -1,0 +1,8 @@
+include README.md
+include LICENSE
+recursive-include config *.yaml *.yml
+recursive-include docs *.md
+global-exclude __pycache__
+global-exclude *.pyc
+global-exclude .pytest_cache
+global-exclude .mypy_cache

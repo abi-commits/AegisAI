@@ -10,19 +10,19 @@ Design principles:
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal, Optional
 from uuid import uuid4
 
-from src.aegis_ai.data.schemas.login_event import LoginEvent
-from src.aegis_ai.data.schemas.session import Session
-from src.aegis_ai.data.schemas.device import Device
-from src.aegis_ai.data.schemas.user import User
-from src.aegis_ai.agents.detection.schema import DetectionOutput
-from src.aegis_ai.agents.behavior.schema import BehavioralOutput
-from src.aegis_ai.agents.network.schema import NetworkOutput
-from src.aegis_ai.agents.confidence.schema import ConfidenceOutput
-from src.aegis_ai.agents.explanation.schema import ExplanationOutput
+from aegis_ai.data.schemas.login_event import LoginEvent
+from aegis_ai.data.schemas.session import Session
+from aegis_ai.data.schemas.device import Device
+from aegis_ai.data.schemas.user import User
+from aegis_ai.agents.detection.schema import DetectionOutput
+from aegis_ai.agents.behavior.schema import BehavioralOutput
+from aegis_ai.agents.network.schema import NetworkOutput
+from aegis_ai.agents.confidence.schema import ConfidenceOutput
+from aegis_ai.agents.explanation.schema import ExplanationOutput
 
 
 @dataclass(frozen=True)
@@ -96,7 +96,7 @@ class FinalDecision:
         """Factory method to create a FinalDecision with proper ID and timestamp."""
         return cls(
             decision_id=f"dec_{uuid4().hex[:12]}",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             action=action,
             decided_by=decided_by,
             confidence_score=confidence_score,
@@ -143,7 +143,7 @@ class EscalationCase:
         """Factory method to create an EscalationCase from agent outputs."""
         return cls(
             case_id=f"esc_{uuid4().hex[:12]}",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             session_id=session_id,
             user_id=user_id,
             reason=reason,
@@ -179,7 +179,7 @@ class DecisionContext:
         """Factory method to create a new DecisionContext."""
         return cls(
             context_id=f"ctx_{uuid4().hex[:12]}",
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             input_context=input_context
         )
     

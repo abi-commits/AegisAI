@@ -1,11 +1,11 @@
 """Policy Engine - Evaluates and enforces runtime governance constraints."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import yaml
 
-from src.aegis_ai.governance.schemas import (
+from aegis_ai.governance.schemas import (
     PolicyRules,
     PolicyCheckResult,
     PolicyDecision,
@@ -284,7 +284,7 @@ class PolicyEngine:
         """
         violations = []
         
-        today = datetime.utcnow().strftime("%Y-%m-%d")
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         
         if user_id not in self._action_counts:
             self._action_counts[user_id] = {}
@@ -401,7 +401,7 @@ class PolicyEngine:
             user_id: User ID
             action: Action taken
         """
-        today = datetime.utcnow().strftime("%Y-%m-%d")
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         
         if user_id not in self._action_counts:
             self._action_counts[user_id] = {}

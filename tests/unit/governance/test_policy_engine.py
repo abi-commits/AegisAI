@@ -8,11 +8,11 @@ import tempfile
 import os
 from pathlib import Path
 
-from src.aegis_ai.governance.policies.engine import (
+from aegis_ai.governance.policies.engine import (
     PolicyEngine,
     PolicyViolationError,
 )
-from src.aegis_ai.governance.schemas import (
+from aegis_ai.governance.schemas import (
     PolicyDecision,
     PolicyViolationType,
 )

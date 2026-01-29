@@ -7,12 +7,12 @@ import pytest
 import tempfile
 import os
 
-from src.aegis_ai.governance.override import (
+from aegis_ai.governance.override import (
     HumanOverrideHandler,
     HumanOverrideError,
 )
-from src.aegis_ai.governance.audit.logger import AuditLogger
-from src.aegis_ai.governance.schemas import (
+from aegis_ai.governance.audit.logger import AuditLogger
+from aegis_ai.governance.schemas import (
     OverrideType,
     PolicyRules,
     AuditEventType,
@@ -253,9 +253,9 @@ class TestOverrideTypes:
     
     def test_defer_decision(self, override_handler):
         """Test deferring a decision."""
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         
-        defer_until = datetime.utcnow() + timedelta(hours=2)
+        defer_until = datetime.now(timezone.utc) + timedelta(hours=2)
         
         override = override_handler.defer_decision(
             original_decision_id="dec_123",
