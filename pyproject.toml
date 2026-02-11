@@ -14,35 +14,38 @@ dependencies = [
     "pydantic>=2.0,<3",
     "pandas>=2.0",
     "numpy>=1.24",
-    "xgboost>=2.0",
-    "lightgbm>=4.0",
     "scikit-learn>=1.3",
-    "shap>=0.44",
-    "torch>=2.0",
-    "torch-geometric>=2.3",
     "pyyaml>=6.0",
     "fastapi>=0.104",
     "uvicorn>=0.24",
-    "mlflow>=2.8",
     "python-dotenv>=1.0",
     "boto3>=1.42.37",
 ]
 
 [project.scripts]
-aegis-ai = "aegis_ai.main:main"
-aegis-ai-demo = "aegis_ai.scripts.demo:main"
+# Entry points for CLI (currently not used in containerized deployment)
+# aegis-ai = "aegis_ai.main:main"
 
 [project.optional-dependencies]
+ml = [
+    "xgboost>=2.0",
+    "lightgbm>=4.0",
+    "shap>=0.44",
+    "torch>=2.0",
+    "torch-geometric>=2.3",
+    "mlflow>=2.8",
+]
 dev = [
     "pytest>=7.4",
     "pytest-cov>=4.1",
     "pytest-asyncio>=0.21",
     "httpx>=0.28",
-    "black>=23.0",
+    "black>=24.0",
     "pylint>=3.0",
     "mypy>=1.5",
     "isort>=5.12",
-    "flake8>=6.1",
+    "flake8>=7.0",
+    "bandit>=1.7",
 ]
 
 docs = [
@@ -59,15 +62,40 @@ where = ["src"]
 [tool.black]
 line-length = 100
 target-version = ['py311', 'py312', 'py313']
+exclude = '''
+/(
+    \.git
+    | \.venv
+    | __pycache__
+    | build
+    | dist
+)/
+'''
 
-[tool.pylint]
+[tool.isort]
+profile = "black"
+line_length = 100
+skip_gitignore = true
+known_first_party = ["aegis_ai"]
+
+[tool.pylint.main]
 max-line-length = 100
+disable = [
+    "C0114",  # missing-module-docstring
+    "C0115",  # missing-class-docstring
+    "C0116",  # missing-function-docstring
+    "R0903",  # too-few-public-methods
+    "R0913",  # too-many-arguments
+]
+ignore-patterns = ["test_.*\\.py"]
 
 [tool.mypy]
 python_version = "3.13"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
+ignore_missing_imports = true
+exclude = ["tests/", "build/", "dist/"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -75,4 +103,22 @@ addopts = "-v --strict-markers"
 markers = [
     "unit: Unit tests",
     "integration: Integration tests",
+    "slow: Slow tests",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["src/aegis_ai"]
+omit = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
 ]

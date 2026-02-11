@@ -1,14 +1,6 @@
-"""Monitoring - What You Actually Watch.
+"""Monitoring - track escalation, confidence, overrides, policy vetoes, input drift."""
 
-Track:
-- Escalation rate (decisions requiring human review)
-- Confidence distribution (model confidence patterns)
-- Override rate (how often humans disagree)
-- Policy veto count (policy rejections)
-- Input drift summaries (feature changes)
-"""
-
-import logging
+import logging, os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
@@ -16,12 +8,12 @@ from enum import Enum
 
 import boto3
 from botocore.exceptions import ClientError
+from aegis_ai.common.constants import MonitoringConstants
 
 logger = logging.getLogger(__name__)
 
 
 class MetricType(str, Enum):
-    """Types of metrics to track."""
     ESCALATION_RATE = "escalation_rate"
     OVERRIDE_RATE = "override_rate"
     POLICY_VETO_RATE = "policy_veto_rate"
@@ -36,7 +28,6 @@ class MetricType(str, Enum):
 
 @dataclass
 class MetricPoint:
-    """Single metric data point."""
     metric_name: str
     value: float
     unit: str = "None"
@@ -49,53 +40,18 @@ class MetricPoint:
 
 
 class MetricsCollector:
-    """Collects and publishes metrics to CloudWatch.
-    
-    Tracks:
-    - System-level metrics (escalation rate, override rate)
-    - Model metrics (confidence distribution, drift)
-    - Policy metrics (veto rate)
-    - Performance metrics (latency)
-    
-    Never tracks:
-    - Individual decision accuracy (AUC, precision, recall)
-    - Feature values (privacy)
-    - User details (privacy)
-    
-    Environment variables:
-    - AWS_REGION: AWS region (default: us-east-1)
-    - CLOUDWATCH_NAMESPACE: CloudWatch namespace
-    """
+    """Collects and publishes metrics to CloudWatch."""
     
     DEFAULT_REGION = "us-east-1"
     DEFAULT_NAMESPACE = "AegisAI"
     
-    def __init__(
-        self,
-        namespace: Optional[str] = None,
-        region: Optional[str] = None,
-        aws_profile: Optional[str] = None,
-        batch_size: int = 20,
-    ):
-        """Initialize metrics collector.
-        
-        Args:
-            namespace: CloudWatch namespace (default: AegisAI)
-            region: AWS region
-            aws_profile: AWS profile
-            batch_size: Number of metrics to batch before publish
-        """
-        import os
-        
-        self.namespace = namespace or os.environ.get(
-            "CLOUDWATCH_NAMESPACE",
-            self.DEFAULT_NAMESPACE,
-        )
+    def __init__(self, namespace: Optional[str] = None, region: Optional[str] = None,
+                 aws_profile: Optional[str] = None, batch_size: int = 20):
+        self.namespace = namespace or os.environ.get("CLOUDWATCH_NAMESPACE", self.DEFAULT_NAMESPACE)
         self.region = region or os.environ.get("AWS_REGION", self.DEFAULT_REGION)
         self.batch_size = batch_size
         self.metric_buffer: List[MetricPoint] = []
         
-        # Initialize CloudWatch client
         if aws_profile:
             session = boto3.Session(profile_name=aws_profile)
             self.cloudwatch = session.client("cloudwatch", region_name=self.region)
@@ -323,37 +279,24 @@ class MetricsCollector:
 
 
 class AlertingThresholds:
-    """Thresholds for alerting on anomalies.
+    """Thresholds for alerting on anomalies."""
     
-    These are operational thresholds, not accuracy thresholds.
-    """
-    
-    # Escalation rate (percentage of decisions escalated)
-    ESCALATION_RATE_WARNING = 0.05    # 5% - worth investigating
-    ESCALATION_RATE_CRITICAL = 0.15   # 15% - definitely investigate
-    
-    # Override rate (percentage of decisions overridden)
-    OVERRIDE_RATE_WARNING = 0.10      # 10%
-    OVERRIDE_RATE_CRITICAL = 0.25     # 25%
-    
-    # Policy veto rate
-    POLICY_VETO_RATE_WARNING = 0.08   # 8%
-    POLICY_VETO_RATE_CRITICAL = 0.20  # 20%
-    
-    # Confidence distribution
-    CONFIDENCE_MEAN_WARNING = 0.50    # Low confidence
-    CONFIDENCE_STD_WARNING = 0.30     # High variance
-    
-    # Input drift
-    DRIFT_MAGNITUDE_WARNING = 0.5     # 50% drift
-    
-    # Agent error rate
-    AGENT_ERROR_RATE_WARNING = 0.01   # 1%
-    AGENT_ERROR_RATE_CRITICAL = 0.05  # 5%
-    
-    # Decision latency (milliseconds)
-    DECISION_LATENCY_WARNING = 500    # 500ms
-    DECISION_LATENCY_CRITICAL = 2000  # 2 seconds
+    ESCALATION_RATE_WARNING = MonitoringConstants.ESCALATION_RATE_WARNING
+    ESCALATION_RATE_CRITICAL = MonitoringConstants.ESCALATION_RATE_CRITICAL
+    OVERRIDE_RATE_WARNING = MonitoringConstants.OVERRIDE_RATE_WARNING
+    OVERRIDE_RATE_CRITICAL = MonitoringConstants.OVERRIDE_RATE_CRITICAL
+    POLICY_VETO_RATE_WARNING = 0.08
+    POLICY_VETO_RATE_CRITICAL = 0.20
+    CONFIDENCE_MEAN_WARNING = 0.50
+    CONFIDENCE_STD_WARNING = 0.30
+    CONFIDENCE_MEAN_ANOMALY_THRESHOLD = MonitoringConstants.CONFIDENCE_MEAN_ANOMALY
+    CONFIDENCE_MIN_ANOMALY = MonitoringConstants.CONFIDENCE_MIN_ANOMALY
+    CONFIDENCE_MAX_ANOMALY = MonitoringConstants.CONFIDENCE_MAX_ANOMALY
+    DRIFT_MAGNITUDE_WARNING = 0.5
+    AGENT_ERROR_RATE_WARNING = 0.01
+    AGENT_ERROR_RATE_CRITICAL = 0.05
+    DECISION_LATENCY_WARNING = MonitoringConstants.DECISION_LATENCY_WARNING_MS
+    DECISION_LATENCY_CRITICAL = MonitoringConstants.DECISION_LATENCY_CRITICAL_MS
 
 
 class AnomalyDetector:

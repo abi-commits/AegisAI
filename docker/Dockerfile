@@ -1,9 +1,4 @@
 # AegisAI Dockerfile
-# Multi-stage build for optimized production image
-
-# ============================================
-# Stage 1: Builder
-# ============================================
 FROM python:3.11-slim AS builder
 
 # Set environment variables
@@ -65,6 +60,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     curl \
+    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -75,7 +71,11 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Copy application code
 COPY --chown=aegis:aegis src/ ./src/
 COPY --chown=aegis:aegis config/ ./config/
+COPY --chown=aegis:aegis docker/entrypoint.sh /app/entrypoint.sh
 COPY --chown=aegis:aegis main.py ./
+
+# Ensure entrypoint is executable
+RUN chmod +x /app/entrypoint.sh
 
 # Create directories for logs and data
 RUN mkdir -p /app/logs/audit /app/data && \
@@ -89,7 +89,7 @@ EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:8000/ready || exit 1
 
 # Default command: Run the FastAPI server
-CMD ["uvicorn", "aegis_ai.api.gateway:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["/app/entrypoint.sh"]

@@ -1,43 +1,20 @@
-"""Background Audit Writer - Async audit logging for high throughput.
+"""Background Audit Writer - Async audit logging for high throughput."""
 
-This module provides a background writer that buffers audit entries
-and writes them asynchronously, reducing request latency.
-
-Design principles:
-- Non-blocking audit writes in request path
-- Bounded queue with backpressure handling
-- Graceful shutdown with flush guarantee
-- Fallback to synchronous writes when queue is full
-"""
-
-import atexit
-import logging
-import queue
-import threading
+import atexit, logging, queue, threading
 from typing import Optional
 
 from aegis_ai.governance.audit.store import AuditStore, FileAuditStore
 from aegis_ai.governance.schemas import AuditEntry
-
+from aegis_ai.common.constants import AuditConstants
 
 logger = logging.getLogger(__name__)
 
 
 class BackgroundAuditWriter:
-    """Background writer for non-blocking audit log writes.
+    """Background writer for non-blocking audit log writes."""
     
-    Buffers audit entries in a bounded queue and writes them
-    asynchronously using a background thread.
-    
-    Features:
-    - Non-blocking append with bounded queue
-    - Automatic fallback to sync writes when queue is full
-    - Graceful shutdown with flush guarantee
-    - Configurable batch size and flush interval
-    """
-    
-    DEFAULT_QUEUE_SIZE = 10000
-    DEFAULT_FLUSH_TIMEOUT = 5.0  # seconds
+    DEFAULT_QUEUE_SIZE = AuditConstants.QUEUE_SIZE
+    DEFAULT_FLUSH_TIMEOUT = AuditConstants.FLUSH_TIMEOUT_SECONDS
     
     def __init__(
         self,
@@ -97,7 +74,7 @@ class BackgroundAuditWriter:
         while not self._shutdown_event.is_set():
             try:
                 # Wait for an entry with timeout to allow shutdown check
-                entry = self._queue.get(timeout=1.0)
+                entry = self._queue.get(timeout=AuditConstants.QUEUE_GET_TIMEOUT)
                 
                 if entry is None:
                     # Shutdown signal

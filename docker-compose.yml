@@ -15,23 +15,34 @@ services:
     environment:
       - AEGIS_ENVIRONMENT=${AEGIS_ENVIRONMENT:-production}
       - AEGIS_LOG_LEVEL=${AEGIS_LOG_LEVEL:-INFO}
+      - AEGIS_DEBUG=${AEGIS_DEBUG:-false}
       - AEGIS_API_HOST=0.0.0.0
       - AEGIS_API_PORT=8000
+      - AEGIS_WORKERS=${AEGIS_WORKERS:-2}
+      - AEGIS_ENABLE_DOCS=${AEGIS_ENABLE_DOCS:-true}
+      - AEGIS_CORS_ORIGINS=${AEGIS_CORS_ORIGINS:-}
+      - AEGIS_POLICY_VERSION=${AEGIS_POLICY_VERSION:-1.0.0}
       # AWS credentials for audit storage (if using S3/DynamoDB)
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
-      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
-      # Audit configuration
+      - AWS_REGION=${AWS_REGION:-ap-south-1}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-ap-south-1}
+      # Audit configuration (both naming conventions)
       - AEGIS_AUDIT_STORAGE_TYPE=${AEGIS_AUDIT_STORAGE_TYPE:-local}
+      - AUDIT_STORAGE_TYPE=${AUDIT_STORAGE_TYPE:-local}
       - AEGIS_AUDIT_S3_BUCKET=${AEGIS_AUDIT_S3_BUCKET:-}
+      - S3_AUDIT_BUCKET=${S3_AUDIT_BUCKET:-}
+      - S3_AUDIT_PREFIX=${S3_AUDIT_PREFIX:-audit-logs/}
       - AEGIS_AUDIT_DYNAMODB_TABLE=${AEGIS_AUDIT_DYNAMODB_TABLE:-}
+      # Model registry
+      - S3_MODEL_REGISTRY_BUCKET=${S3_MODEL_REGISTRY_BUCKET:-}
     volumes:
       # Persist audit logs
       - aegis-logs:/app/logs
       # Mount config for runtime updates (optional)
       - ./config:/app/config:ro
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/ready"]
       interval: 30s
       timeout: 10s
       retries: 3

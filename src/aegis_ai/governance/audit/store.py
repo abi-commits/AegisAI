@@ -1,153 +1,82 @@
-"""Audit Store - Abstraction for audit log persistence.
-
-This module provides an interface for audit log storage backends,
-decoupling audit logic from specific persistence mechanisms.
-
-Design principles:
-- Protocol-based interface for testability and extensibility
-- Support for file, database, or remote storage backends
-- Thread-safe operations
-- Atomic writes with integrity verification
-"""
+"""Audit store abstraction for log persistence."""
 
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Generator, List, Optional, Protocol
-import hashlib
-import json
-import os
-import threading
-import fcntl
+import hashlib, json, os, threading, fcntl
 
 from aegis_ai.governance.schemas import AuditEntry, AuditEventType
 
 
+def _get_default_log_dir() -> Path:
+    env_override = os.getenv("AEGIS_AUDIT_LOG_DIR")
+    if env_override:
+        return Path(env_override)
+
+    app_logs = Path("/app/logs/audit")
+    if app_logs.parent.exists():
+        return app_logs
+
+    return Path.cwd() / "logs" / "audit"
+
+
 class AuditLogIntegrityError(Exception):
-    """Raised when audit log integrity check fails."""
     pass
 
 
 class AuditStore(ABC):
-    """Abstract base class for audit log storage backends.
-    
-    Implementations must provide thread-safe, append-only storage
-    with optional hash chain integrity.
-    """
+    """Abstract base for audit log storage backends."""
     
     @abstractmethod
     def append_entry(self, entry: AuditEntry) -> AuditEntry:
-        """Append an audit entry to the store.
-        
-        Args:
-            entry: The audit entry to append
-            
-        Returns:
-            The entry with hash chain fields populated
-            
-        Raises:
-            IOError: If write fails
-        """
+        """Append audit entry and return with hash populated."""
         pass
     
     @abstractmethod
-    def get_entries(
-        self,
-        date: Optional[str] = None,
-        event_type: Optional[AuditEventType] = None,
-        decision_id: Optional[str] = None,
-        session_id: Optional[str] = None,
-        user_id: Optional[str] = None,
-    ) -> Generator[AuditEntry, None, None]:
-        """Retrieve audit entries with optional filtering.
-        
-        Args:
-            date: Filter by date (YYYY-MM-DD format)
-            event_type: Filter by event type
-            decision_id: Filter by decision ID
-            session_id: Filter by session ID
-            user_id: Filter by user ID
-            
-        Yields:
-            Matching AuditEntry objects
-        """
+    def get_entries(self, date: Optional[str] = None,
+                   event_type: Optional[AuditEventType] = None,
+                   decision_id: Optional[str] = None,
+                   session_id: Optional[str] = None,
+                   user_id: Optional[str] = None) -> Generator[AuditEntry, None, None]:
+        """Retrieve audit entries with optional filtering."""
         pass
     
     @abstractmethod
     def verify_integrity(self, date: Optional[str] = None) -> bool:
-        """Verify hash chain integrity of stored entries.
-        
-        Args:
-            date: Date to verify (YYYY-MM-DD format), or None for current
-            
-        Returns:
-            True if integrity check passes
-            
-        Raises:
-            AuditLogIntegrityError: If integrity check fails
-        """
+        """Verify hash chain integrity of stored entries."""
         pass
     
     @abstractmethod
     def get_last_hash(self) -> Optional[str]:
-        """Get the hash of the last entry for chain continuity.
-        
-        Returns:
-            The last entry hash, or None if store is empty
-        """
+        """Get hash of last entry for chain continuity."""
         pass
 
 
 class FileAuditStore(AuditStore):
-    """File-based audit store with JSONL format and hash chain integrity.
+    """File-based audit store with JSONL format and hash chain integrity."""
     
-    Features:
-    - Append-only JSONL files with daily rotation
-    - Hash chain for tamper detection
-    - Atomic writes with file locking
-    - Sidecar metadata for fast startup
-    """
-    
-    DEFAULT_LOG_DIR = Path(__file__).parent.parent.parent.parent.parent / "logs" / "audit"
+    DEFAULT_LOG_DIR = _get_default_log_dir()
     METADATA_SUFFIX = ".meta"
     
-    def __init__(
-        self,
-        log_dir: Optional[str] = None,
-        log_filename_pattern: str = "aegis_audit_{date}.jsonl",
-        enable_hash_chain: bool = True,
-        hash_algorithm: str = "sha256",
-        fsync_on_write: bool = False,
-    ):
-        """Initialize file audit store.
-        
-        Args:
-            log_dir: Directory for audit logs. Uses default if not provided.
-            log_filename_pattern: Pattern for log filename. {date} is replaced.
-            enable_hash_chain: Whether to enable hash chain integrity.
-            hash_algorithm: Hash algorithm for integrity checks.
-            fsync_on_write: Whether to fsync after each write (slower but safer).
-        """
-        self.log_dir = Path(log_dir) if log_dir else self.DEFAULT_LOG_DIR
+    def __init__(self, log_dir: Optional[str] = None,
+                 log_filename_pattern: str = "aegis_audit_{date}.jsonl",
+                 enable_hash_chain: bool = True, hash_algorithm: str = "sha256",
+                 fsync_on_write: bool = False):
+        self.log_dir = Path(log_dir) if log_dir else _get_default_log_dir()
         self.log_filename_pattern = log_filename_pattern
         self.enable_hash_chain = enable_hash_chain
         self.hash_algorithm = hash_algorithm
         self.fsync_on_write = fsync_on_write
-        
-        # Thread safety
         self._lock = threading.Lock()
-        
-        # Cache last hash for chain continuity
         self._last_hash: Optional[str] = None
         
-        # Ensure log directory exists with secure permissions
         self.log_dir.mkdir(parents=True, exist_ok=True)
         try:
             os.chmod(self.log_dir, 0o700)
         except OSError:
-            pass  # May fail on some systems; proceed anyway
+            pass
         
-        # Initialize hash chain from metadata or existing logs
         if self.enable_hash_chain:
             self._last_hash = self._load_last_hash()
     

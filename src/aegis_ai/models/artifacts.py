@@ -1,31 +1,11 @@
-"""Model Artifacts & Versioning - Frozen in Time.
+"""Model artifacts & versioning - frozen in time."""
 
-This module provides immutable model versioning and artifact management.
-
-Features:
-- Model version immutability (write-once semantics)
-- Feature schema tracking (hashed for integrity)
-- Policy version linkage
-- Complete decision traceability
-- S3 + MLflow integration
-
-Design principle:
-"Yes, we know exactly why that decision happened."
-- Track model version used
-- Track feature schema at decision time
-- Track policy version used
-- Enable post-hoc analysis and auditing
-"""
-
-import json
-import logging
-import hashlib
+import json, logging, hashlib, os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 from dataclasses import dataclass, asdict
 from enum import Enum
-import os
 
 import boto3
 from botocore.exceptions import ClientError
@@ -34,137 +14,88 @@ logger = logging.getLogger(__name__)
 
 
 class ModelType(str, Enum):
-    """Types of models in the system."""
-    DETECTION = "detection"           # Threat/anomaly detection
-    BEHAVIOR = "behavior"              # Behavioral analysis
-    NETWORK = "network"                # Network analysis
-    CONFIDENCE = "confidence"          # Confidence calibration
-    EXPLANATION = "explanation"        # Decision explanation
-    RISK = "risk"                      # Risk scoring
-    CALIBRATION = "calibration"        # Confidence calibration
+    DETECTION = "detection"
+    BEHAVIOR = "behavior"
+    NETWORK = "network"
+    CONFIDENCE = "confidence"
+    EXPLANATION = "explanation"
+    RISK = "risk"
+    CALIBRATION = "calibration"
 
 
 @dataclass
 class FeatureSchema:
-    """Schema of features used by a model version."""
-    
     model_type: str
-    features: Dict[str, str]  # {feature_name: data_type}
-    version: str              # Schema version
+    features: Dict[str, str]
+    version: str
     timestamp: str
     
     def compute_hash(self) -> str:
-        """Compute hash of schema for integrity verification."""
         schema_str = json.dumps(
-            {
-                "model_type": self.model_type,
-                "features": self.features,
-                "version": self.version,
-            },
-            sort_keys=True,
-        )
+            {"model_type": self.model_type, "features": self.features, "version": self.version},
+            sort_keys=True)
         return hashlib.sha256(schema_str.encode()).hexdigest()
 
 
 @dataclass
 class ModelArtifact:
     """Immutable model artifact metadata."""
-    
-    model_id: str                      # Unique model identifier
-    model_type: ModelType              # Type of model
-    version: str                       # Model version (semantic)
-    artifact_uri: str                  # S3 URI to model artifact
-    feature_schema: FeatureSchema      # Input feature schema
-    hyperparameters: Dict[str, Any]    # Model hyperparameters
-    performance_metrics: Dict[str, float]  # Training metrics (AUC, etc.)
-    training_data_hash: str            # Hash of training data
-    framework: str                     # Framework (sklearn, torch, etc.)
-    python_version: str                # Python version used
-    framework_version: str             # Framework version
-    created_at: str                    # Creation timestamp
-    created_by: str                    # Creator/system
-    policy_version: str                # Associated policy version
+    model_id: str
+    model_type: ModelType
+    version: str
+    artifact_uri: str
+    feature_schema: FeatureSchema
+    hyperparameters: Dict[str, Any]
+    performance_metrics: Dict[str, float]
+    training_data_hash: str
+    framework: str
+    python_version: str
+    framework_version: str
+    created_at: str
+    created_by: str
+    policy_version: str
     description: str = ""
     tags: Dict[str, str] = None
     
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for storage."""
         data = asdict(self)
         if self.tags is None:
             data["tags"] = {}
         return data
     
     def compute_hash(self) -> str:
-        """Compute hash for integrity verification."""
-        content = json.dumps(
-            {
-                "model_id": self.model_id,
-                "version": self.version,
-                "feature_schema_hash": self.feature_schema.compute_hash(),
-                "hyperparameters": self.hyperparameters,
-                "framework_version": self.framework_version,
-                "training_data_hash": self.training_data_hash,
-            },
-            sort_keys=True,
-            default=str,
-        )
+        content = json.dumps({
+            "model_id": self.model_id, "version": self.version,
+            "feature_schema_hash": self.feature_schema.compute_hash(),
+            "hyperparameters": self.hyperparameters,
+            "framework_version": self.framework_version,
+            "training_data_hash": self.training_data_hash}, sort_keys=True, default=str)
         return hashlib.sha256(content.encode()).hexdigest()
 
 
 class ModelRegistry:
-    """Registry for model versions with immutability guarantees.
-    
-    Features:
-    - Immutable model artifact storage
-    - Feature schema tracking
-    - Policy version linkage
-    - S3-backed storage
-    - MLflow integration (optional)
-    
-    Environment variables:
-    - S3_MODEL_REGISTRY_BUCKET: S3 bucket for model artifacts
-    - AWS_REGION: AWS region (default: us-east-1)
-    - MLFLOW_TRACKING_URI: MLflow server URI (optional)
-    """
+    """Registry for model versions with immutability guarantees."""
     
     DEFAULT_REGION = "us-east-1"
     DEFAULT_PREFIX = "model-registry/"
     
-    def __init__(
-        self,
-        bucket_name: Optional[str] = None,
-        prefix: str = DEFAULT_PREFIX,
-        region: Optional[str] = None,
-        aws_profile: Optional[str] = None,
-        mlflow_uri: Optional[str] = None,
-    ):
-        """Initialize model registry.
-        
-        Args:
-            bucket_name: S3 bucket for artifacts (or S3_MODEL_REGISTRY_BUCKET env var)
-            prefix: Prefix for registry (default: model-registry/)
-            region: AWS region
-            aws_profile: AWS profile name
-            mlflow_uri: MLflow tracking URI for optional integration
-        """
+    def __init__(self, bucket_name: Optional[str] = None, prefix: str = DEFAULT_PREFIX,
+                 region: Optional[str] = None, aws_profile: Optional[str] = None,
+                 mlflow_uri: Optional[str] = None):
         self.bucket_name = bucket_name or os.environ.get("S3_MODEL_REGISTRY_BUCKET")
         if not self.bucket_name:
-            raise ValueError(
-                "S3 bucket required. Set S3_MODEL_REGISTRY_BUCKET or pass bucket_name."
-            )
+            raise ValueError("S3 bucket required. Set S3_MODEL_REGISTRY_BUCKET or pass bucket_name.")
         
         self.prefix = prefix
         self.region = region or os.environ.get("AWS_REGION", self.DEFAULT_REGION)
         self.mlflow_uri = mlflow_uri or os.environ.get("MLFLOW_TRACKING_URI")
         
-        # Initialize S3 client
         if aws_profile:
             session = boto3.Session(profile_name=aws_profile)
             self.s3_client = session.client("s3", region_name=self.region)
         else:
             self.s3_client = boto3.client("s3", region_name=self.region)
         
-        # Optional MLflow client
         self.mlflow = None
         if self.mlflow_uri:
             try:
@@ -175,17 +106,10 @@ class ModelRegistry:
             except ImportError:
                 logger.warning("MLflow not installed, skipping MLflow integration")
         
-        logger.info(
-            f"Initialized ModelRegistry: bucket={self.bucket_name}, "
-            f"prefix={self.prefix}, region={self.region}"
-        )
+        logger.info(f"Initialized ModelRegistry: bucket={self.bucket_name}, prefix={self.prefix}")
     
     def _get_registry_key(self, model_type: str, model_id: str, version: str) -> str:
-        """Get S3 key for model metadata.
-        
-        Format: {prefix}/{model_type}/{model_id}/{version}/metadata.json
-        Example: model-registry/detection/det_model_001/v1.0/metadata.json
-        """
+        """Get S3 key for model metadata: {prefix}/{model_type}/{model_id}/{version}/metadata.json"""
         return f"{self.prefix}{model_type}/{model_id}/{version}/metadata.json"
     
     def _get_artifact_key(self, model_type: str, model_id: str, version: str) -> str:

@@ -1,21 +1,6 @@
-"""API Gateway - FastAPI application for AegisAI.
+"""API Gateway - FastAPI application with single /evaluate-login endpoint."""
 
-Single endpoint design:
-    POST /evaluate-login
-
-Returns ONLY:
-    - decision
-    - confidence  
-    - explanation
-    - escalation_flag
-    - audit_id
-
-IMPORTANT: No internal agent outputs are exposed through this API.
-"""
-
-import logging
-import os
-import threading
+import logging, os, threading
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, List, Optional
 from uuid import uuid4
@@ -24,32 +9,17 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from aegis_ai.api.schemas import (
-    EvaluateLoginRequest,
-    EvaluateLoginResponse,
-    ErrorResponse,
-)
+from aegis_ai.api.schemas import (EvaluateLoginRequest, EvaluateLoginResponse, ErrorResponse)
 from aegis_ai.api.service import LoginEvaluationService
 
-
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("aegis_api")
 
 
-# =============================================================================
-# SERVICE SINGLETON WITH THREAD-SAFE INITIALIZATION
-# =============================================================================
-
 class ServiceManager:
-    """Thread-safe service singleton manager.
-    
-    Ensures the LoginEvaluationService is initialized exactly once,
-    even under concurrent access from multiple threads/workers.
-    """
+    """Thread-safe service singleton manager."""
     
     _instance: Optional[LoginEvaluationService] = None
     _lock = threading.Lock()
@@ -60,7 +30,6 @@ class ServiceManager:
         """Get or create the evaluation service instance (thread-safe)."""
         if cls._instance is None:
             with cls._lock:
-                # Double-check locking pattern
                 if cls._instance is None:
                     cls._instance = LoginEvaluationService()
                     cls._initialized = True
@@ -75,6 +44,7 @@ class ServiceManager:
                 cls._instance.shutdown()
                 cls._instance = None
                 cls._initialized = False
+
                 logger.info("LoginEvaluationService shutdown complete")
 
 
@@ -101,7 +71,7 @@ def get_cors_origins() -> List[str]:
         return [origin.strip() for origin in origins_env.split(",") if origin.strip()]
     
     # Default: restrictive in production, permissive in development
-    if os.environ.get("AEGIS_ENV", "development") == "production":
+    if os.environ.get("AEGIS_ENVIRONMENT", "development") == "production":
         logger.warning(
             "AEGIS_CORS_ORIGINS not set in production. "
             "CORS will be disabled. Set AEGIS_CORS_ORIGINS for cross-origin access."
@@ -135,14 +105,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 # Create FastAPI application
+environment = os.environ.get("AEGIS_ENVIRONMENT", "development")
+enable_docs_default = "false" if environment == "production" else "true"
+enable_docs = os.environ.get("AEGIS_ENABLE_DOCS", enable_docs_default).lower() == "true"
+
 app = FastAPI(
     title="AegisAI API Gateway",
     description=(
         "Fraud detection and trust intelligence API. "),
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/docs" if enable_docs else None,
+    redoc_url="/redoc" if enable_docs else None,
 )
 
 
@@ -340,6 +314,17 @@ async def health_check() -> dict:
     return {"status": "healthy", "service": "aegis-ai-gateway"}
 
 
+@app.get("/ready")
+async def readiness_check() -> dict:
+    """Readiness check endpoint.
+
+    Returns 503 until the service singleton is initialized.
+    """
+    if not ServiceManager._initialized:
+        raise HTTPException(status_code=503, detail="not_ready")
+    return {"status": "ready", "service": "aegis-ai-gateway"}
+
+
 # =============================================================================
 # DEVELOPMENT SERVER
 # =============================================================================
@@ -348,7 +333,7 @@ if __name__ == "__main__":
     import uvicorn
     
     uvicorn.run(
-        "src.aegis_ai.api.gateway:app",
+        "aegis_ai.api.gateway:app",
         host="0.0.0.0",
         port=8000,
         reload=True,

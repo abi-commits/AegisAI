@@ -1,15 +1,4 @@
-"""Audit Layer Configuration and Initialization.
-
-Provides factory methods and configuration for audit stores (S3, DynamoDB).
-Supports multiple storage backends for different audit data types.
-
-Environment variables:
-- AUDIT_STORAGE_TYPE: "s3" (default), "file", or "dynamodb"
-- S3_AUDIT_BUCKET: S3 bucket for audit logs
-- DYNAMODB_METADATA_TABLE: DynamoDB table for metadata
-- AWS_REGION: AWS region
-- AWS_PROFILE: AWS profile name
-"""
+"""Audit Layer Configuration and Initialization."""
 
 import logging
 import os
@@ -32,7 +21,7 @@ class AuditConfig:
     
     def __init__(self):
         """Initialize audit configuration from environment."""
-        self.storage_type = os.environ.get("AUDIT_STORAGE_TYPE", self.STORAGE_S3)
+        self.storage_type = os.environ.get("AUDIT_STORAGE_TYPE", self.STORAGE_FILE)
         self.s3_bucket = os.environ.get("S3_AUDIT_BUCKET")
         self.s3_prefix = os.environ.get("S3_AUDIT_PREFIX", "audit-logs/")
         self.s3_environment = os.environ.get("S3_ENVIRONMENT", "production")

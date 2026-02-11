@@ -1,14 +1,4 @@
-"""Audit Logger - Facade for audit logging with flexible backends.
-
-This module provides a high-level interface for audit logging,
-delegating to AuditStore implementations for actual persistence.
-
-Design principles:
-- Facade pattern for simplified API
-- Pluggable storage backends
-- Optional background writing for performance
-- Thread-safe operations
-"""
+"""Audit logger facade with pluggable backends."""
 
 import logging
 from datetime import datetime
@@ -16,74 +6,33 @@ from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Union
 
 from aegis_ai.governance.schemas import (
-    AuditEntry,
-    AuditEventType,
-    HumanOverride,
-    PolicyCheckResult,
-)
+    AuditEntry, AuditEventType, HumanOverride, PolicyCheckResult)
 from aegis_ai.governance.audit.store import (
-    AuditStore,
-    FileAuditStore,
-    AuditLogIntegrityError,
-)
+    AuditStore, FileAuditStore, AuditLogIntegrityError)
 
-
-# Re-export for backwards compatibility
 __all__ = ["AuditLogger", "AuditLogIntegrityError"]
-
 logger = logging.getLogger(__name__)
 
 
 class AuditLogger:
-    """High-level audit logger with pluggable backends.
+    """High-level audit logger with pluggable backends."""
     
-    This class provides a simplified interface for audit logging,
-    delegating persistence to an AuditStore implementation.
-    
-    Features:
-    - Pluggable storage backends (file, database, remote)
-    - Optional background writing for reduced latency
-    - Structured logging methods for different event types
-    - Query interface for audit trail retrieval
-    """
-    
-    def __init__(
-        self,
-        store: Optional[AuditStore] = None,
-        log_dir: Optional[str] = None,
-        log_filename_pattern: str = "aegis_audit_{date}.jsonl",
-        enable_hash_chain: bool = True,
-        hash_algorithm: str = "sha256",
-        use_background_writer: bool = False,
-    ):
-        """Initialize audit logger.
-        
-        Args:
-            store: Audit store backend. Creates FileAuditStore if not provided.
-            log_dir: Directory for audit logs (only used if store not provided).
-            log_filename_pattern: Pattern for log filename (only used if store not provided).
-            enable_hash_chain: Whether to enable hash chain integrity.
-            hash_algorithm: Hash algorithm for integrity checks.
-            use_background_writer: Whether to use async background writing.
-        """
-        # Create store if not provided
+    def __init__(self, store: Optional[AuditStore] = None, log_dir: Optional[str] = None,
+                 log_filename_pattern: str = "aegis_audit_{date}.jsonl",
+                 enable_hash_chain: bool = True, hash_algorithm: str = "sha256",
+                 use_background_writer: bool = False):
         if store is not None:
             self._store = store
         else:
             self._store = FileAuditStore(
-                log_dir=log_dir,
-                log_filename_pattern=log_filename_pattern,
-                enable_hash_chain=enable_hash_chain,
-                hash_algorithm=hash_algorithm,
-            )
+                log_dir=log_dir, log_filename_pattern=log_filename_pattern,
+                enable_hash_chain=enable_hash_chain, hash_algorithm=hash_algorithm)
         
-        # Optional background writer
         self._background_writer: Optional["BackgroundAuditWriter"] = None
         if use_background_writer:
             from aegis_ai.governance.audit.background_writer import BackgroundAuditWriter
             self._background_writer = BackgroundAuditWriter(store=self._store)
         
-        # For backwards compatibility
         self.enable_hash_chain = enable_hash_chain
         if isinstance(self._store, FileAuditStore):
             self.log_dir = self._store.log_dir

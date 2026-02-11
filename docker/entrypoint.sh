@@ -1,5 +1,4 @@
-#!/bin/bash
-# AegisAI Docker entrypoint script
+#!/usr/bin/env sh
 
 set -e
 
@@ -28,9 +27,12 @@ fi
 # python -m aegis_ai.scripts.init_db
 
 # Start the application
+# Normalize log level to lowercase for uvicorn which expects lowercase values
+AEGIS_LOG_LEVEL_LOWER=$(echo "${AEGIS_LOG_LEVEL:-info}" | tr '[:upper:]' '[:lower:]')
+
 exec uvicorn aegis_ai.api.gateway:app \
     --host "$AEGIS_API_HOST" \
     --port "$AEGIS_API_PORT" \
     --workers "$AEGIS_WORKERS" \
     --access-log \
-    --log-level "${AEGIS_LOG_LEVEL:-info}"
+    --log-level "${AEGIS_LOG_LEVEL_LOWER}"

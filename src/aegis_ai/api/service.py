@@ -11,6 +11,7 @@ Design principles:
 """
 
 import logging
+import os
 from typing import Optional
 from uuid import uuid4
 
@@ -46,7 +47,7 @@ class LoginEvaluationService:
     - Audit logging failures are logged but don't fail the request
     """
     
-    POLICY_VERSION = "1.0.0"  # Should be loaded from config in production
+    POLICY_VERSION = os.environ.get("AEGIS_POLICY_VERSION", "1.0.0")
     
     def __init__(
         self,

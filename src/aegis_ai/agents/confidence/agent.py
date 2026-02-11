@@ -13,7 +13,8 @@ from typing import Literal, Optional
 from aegis_ai.agents.detection.schema import DetectionOutput
 from aegis_ai.agents.behavior.schema import BehavioralOutput
 from aegis_ai.agents.network.schema import NetworkOutput
-from aegis_ai.agents.confidence.schema import ConfidenceOutput, CalibrationInfo
+from aegis_ai.agents.confidence.schema import CalibrationInfo, ConfidenceOutput
+from aegis_ai.common.constants import ModelConstants
 from aegis_ai.models.calibration import ConfidenceCalibrator
 
 
@@ -171,11 +172,11 @@ class ConfidenceAgent:
         evidence_penalty = 0.0
         
         # Elevated risk + no factors = suspicious, reduce confidence
-        if detection_output.risk_signal_score >= 0.5 and len(detection_output.risk_factors) == 0:
+        if detection_output.risk_signal_score >= ModelConstants.CONFIDENCE_RISK_THRESHOLD and len(detection_output.risk_factors) == 0:
             evidence_penalty += self.MISSING_EVIDENCE_PENALTY
         
         # Elevated network risk + no evidence = suspicious, reduce confidence
-        if network_output.network_risk_score >= 0.5 and len(network_output.evidence_links) == 0:
+        if network_output.network_risk_score >= ModelConstants.CONFIDENCE_RISK_THRESHOLD and len(network_output.evidence_links) == 0:
             evidence_penalty += self.MISSING_EVIDENCE_PENALTY
         
         # High disagreement gets extra penalty

@@ -1,108 +1,44 @@
-"""Decision Flow - The Only Place Decisions Happen.
-
-This module is the single point where final decisions are made.
-No other module may create FinalDecision or EscalationCase.
-
-The confidence gate is sacred:
-- HUMAN_REQUIRED means AI restraint, not AI failure
-- This is a feature, not a bug
-
-Design principles:
-- Single responsibility: decide or escalate
-- Confidence gate is immutable
-- All decisions are traced back to agent outputs
-- Agent failures result in escalation, not server errors
-"""
+"""Decision Flow - The only place where decisions are made."""
 
 import logging
-from typing import Literal, Optional
+from typing import Optional
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from aegis_ai.orchestration.decision_context import (
-    InputContext,
-    DecisionContext,
-    AgentOutputs,
-    FinalDecision,
-    EscalationCase
+    InputContext, DecisionContext, AgentOutputs, FinalDecision, EscalationCase
 )
 from aegis_ai.orchestration.agent_router import AgentRouter, RouterResult, AgentError
-
 
 logger = logging.getLogger(__name__)
 
 
 class DecisionFlow:
-    """Orchestrates the complete decision lifecycle.
+    """Orchestrates the complete decision lifecycle."""
     
-    Lifecycle:
-    1. Validate input
-    2. Route to agents
-    3. Apply confidence gate
-    4. Decide or escalate
-    5. Return immutable decision context
-    
-    Error Handling:
-    - Agent failures result in escalation, not server errors
-    - All paths produce a valid DecisionContext
-    """
-    
-    # Action thresholds based on risk
-    HIGH_RISK_THRESHOLD = 0.70  # Above this = BLOCK consideration
-    MEDIUM_RISK_THRESHOLD = 0.40  # Above this = CHALLENGE consideration
+    HIGH_RISK_THRESHOLD = 0.70
+    MEDIUM_RISK_THRESHOLD = 0.40
     
     def __init__(self, router: Optional[AgentRouter] = None):
-        """Initialize decision flow with router.
-        
-        Args:
-            router: Agent router. Creates default if not provided.
-        """
         self.router = router or AgentRouter()
     
     def process(self, input_context: InputContext) -> DecisionContext:
-        """Process a login event through the full decision pipeline.
-        
-        Args:
-            input_context: Validated input context
-            
-        Returns:
-            Complete DecisionContext with decision or escalation.
-            Never raises - agent failures result in escalation.
-        """
-        # Create the decision context spine
+        """Process a login event through the full decision pipeline."""
         context = DecisionContext.create(input_context)
-        
-        # Route through all agents
         router_result = self.router.route(input_context)
         
         if not router_result.success or router_result.outputs is None:
-            # Agent failures -> escalate to human (not server error)
-            logger.warning(
-                "Agent routing failed, escalating to human review",
-                extra={
-                    "session_id": input_context.session.session_id,
-                    "errors": [e.agent_name for e in (router_result.errors or [])],
-                }
-            )
+            logger.warning(f"Agent routing failed: {[e.agent_name for e in (router_result.errors or [])]}")
             return self._handle_agent_failure(context, input_context, router_result.errors or [])
         
-        # Enrich context with agent outputs (guaranteed non-None after check above)
         agent_outputs = router_result.outputs
         context = context.with_agent_outputs(agent_outputs)
         
-        # Apply the confidence gate (THE MOST IMPORTANT CHECK)
         if agent_outputs.confidence.decision_permission == "HUMAN_REQUIRED":
-            # AI is NOT ALLOWED to decide
-            # This is restraint, not failure
-            escalation = self._create_escalation(
-                input_context=input_context,
-                agent_outputs=agent_outputs
-            )
+            escalation = self._create_escalation(input_context, agent_outputs)
             context = context.with_escalation(escalation)
-            
-            # Also create a decision record marking the escalation
             decision = FinalDecision.create(
-                action="ESCALATE",
-                decided_by="HUMAN_REQUIRED",
+                action="ESCALATE", decided_by="HUMAN_REQUIRED",
                 confidence_score=agent_outputs.confidence.final_confidence,
                 explanation=f"Escalated: {escalation.reason}. {agent_outputs.explanation.explanation_text}",
                 session_id=input_context.session.session_id,
@@ -111,144 +47,60 @@ class DecisionFlow:
             )
             context = context.with_decision(decision)
         else:
-            # AI is ALLOWED to decide
-            decision = self._make_decision(
-                input_context=input_context,
-                agent_outputs=agent_outputs
-            )
+            decision = self._make_decision(input_context, agent_outputs)
             context = context.with_decision(decision)
         
         return context
     
     def _handle_agent_failure(
-        self,
-        context: DecisionContext,
-        input_context: InputContext,
+        self, context: DecisionContext, input_context: InputContext,
         errors: list[AgentError],
     ) -> DecisionContext:
-        """Handle agent failures by creating an escalation.
-        
-        Instead of raising RuntimeError (causing 500), we create an
-        escalation case and return a valid response.
-        
-        Args:
-            context: The decision context being built
-            input_context: Original input
-            errors: List of agent errors
-            
-        Returns:
-            DecisionContext with escalation decision
-        """
-        # Build error summary for explanation
-        error_summary = "; ".join(
-            f"{e.agent_name}: {e.error_type}" for e in errors
-        ) if errors else "Unknown agent failure"
-        
-        # Create a minimal escalation case without agent outputs
-        from uuid import uuid4
+        """Handle agent failures by creating an escalation."""
+        error_summary = "; ".join(f"{e.agent_name}: {e.error_type}" for e in errors) if errors else "Unknown"
         
         escalation = EscalationCase(
-            case_id=f"esc_{uuid4().hex[:12]}",
-            timestamp=datetime.now(timezone.utc),
-            session_id=input_context.session.session_id,
-            user_id=input_context.user.user_id,
-            reason="LOW_CONFIDENCE",  # Agent failure = can't compute confidence
-            confidence_score=0.0,
-            disagreement_score=1.0,  # Maximum uncertainty
-            detection_factors=("Agent processing failed",),
-            behavioral_deviations=(),
+            case_id=f"esc_{uuid4().hex[:12]}", timestamp=datetime.now(timezone.utc),
+            session_id=input_context.session.session_id, user_id=input_context.user.user_id,
+            reason="LOW_CONFIDENCE", confidence_score=0.0, disagreement_score=1.0,
+            detection_factors=("Agent processing failed",), behavioral_deviations=(),
             network_evidence=(),
         )
         context = context.with_escalation(escalation)
         
-        # Create decision record for the escalation
         decision = FinalDecision(
-            decision_id=f"dec_{uuid4().hex[:12]}",
-            timestamp=datetime.now(timezone.utc),
-            action="ESCALATE",
-            decided_by="HUMAN_REQUIRED",
-            confidence_score=0.0,
-            explanation=f"System escalation due to processing error: {error_summary}. Human review required.",
-            session_id=input_context.session.session_id,
-            user_id=input_context.user.user_id,
-            detection_score=0.0,
-            behavioral_score=0.0,
-            network_score=0.0,
+            decision_id=f"dec_{uuid4().hex[:12]}", timestamp=datetime.now(timezone.utc),
+            action="ESCALATE", decided_by="HUMAN_REQUIRED", confidence_score=0.0,
+            explanation=f"System escalation due to error: {error_summary}. Human review required.",
+            session_id=input_context.session.session_id, user_id=input_context.user.user_id,
+            detection_score=0.0, behavioral_score=0.0, network_score=0.0,
             disagreement_score=1.0,
         )
         context = context.with_decision(decision)
-        
         return context
     
-    def _make_decision(
-        self,
-        input_context: InputContext,
-        agent_outputs: AgentOutputs
-    ) -> FinalDecision:
-        """Make the final decision based on agent outputs.
+    def _make_decision(self, input_context: InputContext, agent_outputs: AgentOutputs) -> FinalDecision:
+        """Make final decision based on agent outputs."""
+        recommended = str(agent_outputs.explanation.recommended_action or "CHALLENGE").upper()
         
-        Only called when confidence gate allows AI to decide.
-        """
-        # Use the explanation agent's recommended action as base
-        recommended_action = agent_outputs.explanation.recommended_action
+        action = "BLOCK" if recommended == "BLOCK" else \
+                 "CHALLENGE" if recommended == "CHALLENGE" else \
+                 "ALLOW" if recommended == "ALLOW" else "CHALLENGE"
         
-        # Validate and normalize the recommended action
-        if recommended_action is None:
-            logger.warning(
-                "Explanation agent returned None recommended_action, defaulting to CHALLENGE"
-            )
-            recommended = "CHALLENGE"
-        else:
-            recommended = str(recommended_action).upper()
-        
-        # Map to final action
-        action: Literal["ALLOW", "BLOCK", "CHALLENGE", "ESCALATE"]
-        
-        if recommended == "BLOCK":
-            action = "BLOCK"
-        elif recommended == "CHALLENGE":
-            action = "CHALLENGE"
-        elif recommended == "ALLOW":
-            action = "ALLOW"
-        else:
-            # Unknown recommendation -> challenge to be safe
-            logger.warning(
-                f"Unknown recommended action '{recommended}', defaulting to CHALLENGE"
-            )
-            action = "CHALLENGE"
-        
-        # Get explanation text safely
-        explanation_text = agent_outputs.explanation.explanation_text
-        if not explanation_text:
-            explanation_text = f"Decision: {action} based on risk analysis."
+        explanation = agent_outputs.explanation.explanation_text or f"Decision: {action}"
         
         return FinalDecision.create(
-            action=action,
-            decided_by="AI",
+            action=action, decided_by="AI",
             confidence_score=agent_outputs.confidence.final_confidence,
-            explanation=explanation_text,
+            explanation=explanation,
             session_id=input_context.session.session_id,
             user_id=input_context.user.user_id,
             agent_outputs=agent_outputs
         )
     
-    def _create_escalation(
-        self,
-        input_context: InputContext,
-        agent_outputs: AgentOutputs
-    ) -> EscalationCase:
-        """Create an escalation case for human review.
-        
-        Determines the reason for escalation based on confidence metrics.
-        """
-        # Determine escalation reason
-        reason: Literal["LOW_CONFIDENCE", "HIGH_DISAGREEMENT", "POLICY_OVERRIDE"]
-        
-        if agent_outputs.confidence.disagreement_score > 0.30:
-            reason = "HIGH_DISAGREEMENT"
-        else:
-            reason = "LOW_CONFIDENCE"
-        
+    def _create_escalation(self, input_context: InputContext, agent_outputs: AgentOutputs) -> EscalationCase:
+        """Create an escalation case for human review."""
+        reason = "HIGH_DISAGREEMENT" if agent_outputs.confidence.disagreement_score > 0.30 else "LOW_CONFIDENCE"
         return EscalationCase.create(
             session_id=input_context.session.session_id,
             user_id=input_context.user.user_id,
@@ -256,232 +108,3 @@ class DecisionFlow:
             agent_outputs=agent_outputs
         )
 
-
-# =============================================================================
-# DEMO: End-to-End Decision Flow
-# =============================================================================
-
-def demo_decision_flow():
-    """Demonstrate the complete decision flow with 3 scenarios."""
-    from datetime import datetime
-    from aegis_ai.data.schemas.login_event import LoginEvent
-    from aegis_ai.data.schemas.session import Session, GeoLocation
-    from aegis_ai.data.schemas.device import Device
-    from aegis_ai.data.schemas.user import User
-    
-    print("=" * 70)
-    print("AEGISAI DECISION FLOW DEMO")
-    print("Phase 3: Orchestration & Decision Lifecycle")
-    print("=" * 70)
-    
-    flow = DecisionFlow()
-    
-    # =========================================================================
-    # Scenario 1: Legitimate Login -> ALLOW
-    # =========================================================================
-    print("\n" + "=" * 70)
-    print("SCENARIO 1: Legitimate Login (Expected: ALLOW)")
-    print("=" * 70)
-    
-    user1 = User(
-        user_id="user_legit_001",
-        account_age_days=365,
-        home_country="US",
-        home_city="New York",
-        typical_login_hour_start=8,
-        typical_login_hour_end=18
-    )
-    
-    device1 = Device(
-        device_id="dev_known_001",
-        device_type="desktop",
-        os="Windows 11",
-        browser="Chrome 120",
-        is_known=True,
-        first_seen_at=datetime(2024, 1, 1)
-    )
-    
-    session1 = Session(
-        session_id="sess_legit_001",
-        user_id="user_legit_001",
-        device_id="dev_known_001",
-        ip_address="192.168.1.100",
-        geo_location=GeoLocation(city="New York", country="US", latitude=40.7128, longitude=-74.0060),
-        start_time=datetime.now(),
-        is_vpn=False,
-        is_tor=False
-    )
-    
-    login1 = LoginEvent(
-        event_id="evt_legit_001",
-        session_id="sess_legit_001",
-        user_id="user_legit_001",
-        timestamp=datetime.now(),
-        success=True,
-        auth_method="password",
-        failed_attempts_before=0,
-        time_since_last_login_hours=24.0,
-        is_new_device=False,
-        is_new_ip=False,
-        is_new_location=False,
-        is_ato=False
-    )
-    
-    input1 = InputContext(login_event=login1, session=session1, device=device1, user=user1)
-    result1 = flow.process(input1)
-    
-    print(f"\n✓ Decision: {result1.final_decision.action}")
-    print(f"  Decided by: {result1.final_decision.decided_by}")
-    print(f"  Confidence: {result1.final_decision.confidence_score:.2%}")
-    print(f"  Explanation: {result1.final_decision.explanation}")
-    
-    # =========================================================================
-    # Scenario 2: Clear ATO Attack -> BLOCK
-    # =========================================================================
-    print("\n" + "=" * 70)
-    print("SCENARIO 2: Clear ATO Attack (Expected: BLOCK)")
-    print("=" * 70)
-    
-    user2 = User(
-        user_id="user_victim_002",
-        account_age_days=500,
-        home_country="US",
-        home_city="Los Angeles",
-        typical_login_hour_start=9,
-        typical_login_hour_end=17
-    )
-    
-    device2 = Device(
-        device_id="dev_attacker_002",
-        device_type="desktop",
-        os="Linux Ubuntu",
-        browser="Firefox 121",
-        is_known=False,
-        first_seen_at=None
-    )
-    
-    session2 = Session(
-        session_id="sess_ato_002",
-        user_id="user_victim_002",
-        device_id="dev_attacker_002",
-        ip_address="185.220.101.42",  # Suspicious IP
-        geo_location=GeoLocation(city="Moscow", country="RU", latitude=55.7558, longitude=37.6173),
-        start_time=datetime.now(),
-        is_vpn=True,
-        is_tor=True
-    )
-    
-    login2 = LoginEvent(
-        event_id="evt_ato_002",
-        session_id="sess_ato_002",
-        user_id="user_victim_002",
-        timestamp=datetime.now(),
-        success=True,
-        auth_method="password",
-        failed_attempts_before=5,
-        time_since_last_login_hours=0.5,
-        is_new_device=True,
-        is_new_ip=True,
-        is_new_location=True,
-        is_ato=True  # Ground truth
-    )
-    
-    input2 = InputContext(login_event=login2, session=session2, device=device2, user=user2)
-    result2 = flow.process(input2)
-    
-    print(f"\n✓ Decision: {result2.final_decision.action}")
-    print(f"  Decided by: {result2.final_decision.decided_by}")
-    print(f"  Confidence: {result2.final_decision.confidence_score:.2%}")
-    print(f"  Explanation: {result2.final_decision.explanation}")
-    
-    # =========================================================================
-    # Scenario 3: Uncertain Login -> ESCALATE
-    # =========================================================================
-    print("\n" + "=" * 70)
-    print("SCENARIO 3: Uncertain Login (Expected: ESCALATE)")
-    print("=" * 70)
-    
-    user3 = User(
-        user_id="user_traveler_003",
-        account_age_days=30,  # New account
-        home_country="US",
-        home_city="Chicago",
-        typical_login_hour_start=7,
-        typical_login_hour_end=23
-    )
-    
-    device3 = Device(
-        device_id="dev_new_003",
-        device_type="mobile",
-        os="iOS 17",
-        browser="Safari 17",
-        is_known=False,
-        first_seen_at=None
-    )
-    
-    session3 = Session(
-        session_id="sess_uncertain_003",
-        user_id="user_traveler_003",
-        device_id="dev_new_003",
-        ip_address="45.33.32.156",
-        geo_location=GeoLocation(city="London", country="GB", latitude=51.5074, longitude=-0.1278),
-        start_time=datetime.now(),
-        is_vpn=False,
-        is_tor=False
-    )
-    
-    login3 = LoginEvent(
-        event_id="evt_uncertain_003",
-        session_id="sess_uncertain_003",
-        user_id="user_traveler_003",
-        timestamp=datetime.now(),
-        success=True,
-        auth_method="password",
-        failed_attempts_before=1,
-        time_since_last_login_hours=48.0,
-        is_new_device=True,
-        is_new_ip=True,
-        is_new_location=True,
-        is_ato=False  # Actually legitimate traveler
-    )
-    
-    input3 = InputContext(login_event=login3, session=session3, device=device3, user=user3)
-    result3 = flow.process(input3)
-    
-    print(f"\n✓ Decision: {result3.final_decision.action}")
-    print(f"  Decided by: {result3.final_decision.decided_by}")
-    print(f"  Confidence: {result3.final_decision.confidence_score:.2%}")
-    print(f"  Explanation: {result3.final_decision.explanation}")
-    
-    if result3.escalation_case:
-        print(f"\n  📋 ESCALATION CASE:")
-        print(f"     Case ID: {result3.escalation_case.case_id}")
-        print(f"     Reason: {result3.escalation_case.reason}")
-        print(f"     Detection factors: {result3.escalation_case.detection_factors}")
-        print(f"     Behavioral deviations: {result3.escalation_case.behavioral_deviations}")
-        print(f"     Network evidence: {result3.escalation_case.network_evidence}")
-    
-    # =========================================================================
-    # Summary
-    # =========================================================================
-    print("\n" + "=" * 70)
-    print("SUMMARY")
-    print("=" * 70)
-    print(f"\n✓ Scenario 1 (Legit):     {result1.final_decision.action} by {result1.final_decision.decided_by}")
-    print(f"✓ Scenario 2 (ATO):       {result2.final_decision.action} by {result2.final_decision.decided_by}")
-    print(f"✓ Scenario 3 (Uncertain): {result3.final_decision.action} by {result3.final_decision.decided_by}")
-    
-    print("\n" + "=" * 70)
-    print("PHASE 3 COMPLETE: Orchestration & Decision Lifecycle")
-    print("=" * 70)
-    print("\nKey achievements:")
-    print("  ✓ Immutable DecisionContext (spine of system)")
-    print("  ✓ Parallel agent routing with isolation")
-    print("  ✓ Confidence gate enforced (HUMAN_REQUIRED = AI restraint)")
-    print("  ✓ Structured escalation with facts only")
-    print("  ✓ All decisions traced to agent outputs")
-    print("=" * 70)
-
-
-if __name__ == "__main__":
-    demo_decision_flow()
