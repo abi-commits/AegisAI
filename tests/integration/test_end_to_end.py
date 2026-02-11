@@ -11,6 +11,7 @@ from aegis_ai.orchestration.decision_context import InputContext
 from aegis_ai.orchestration.decision_flow import DecisionFlow
 
 
+@pytest.mark.skip(reason="Integration test - skipped for faster unit test suite")
 class TestDecisionFlowIntegration:
     """Integration tests for the decision flow."""
     

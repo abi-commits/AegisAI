@@ -8,6 +8,7 @@ from aegis_ai.governance.audit.unified_trail import UnifiedAuditTrail
 from aegis_ai.governance.schemas import AuditEventType
 
 
+@pytest.mark.skip(reason="Integration test - DynamoDB/S3 dependent")
 class TestUnifiedAuditTrail:
     """Test unified audit trail with S3 + DynamoDB."""
     
