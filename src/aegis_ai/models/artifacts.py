@@ -3,7 +3,7 @@
 import json, logging, hashlib, os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 from dataclasses import dataclass, asdict
 from enum import Enum
 
