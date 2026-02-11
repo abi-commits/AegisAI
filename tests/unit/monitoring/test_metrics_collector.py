@@ -148,12 +148,9 @@ class TestMetricsCollector:
         
         scores = [0.7, 0.75, 0.8, 0.85, 0.9, 0.92, 0.95]
         collector.record_confidence_distribution(values=scores)
-            scores=scores,
-            decision_type="fraud",
-        )
         
         # Should record at least 3 metrics (mean, std, p95)
-        assert len(collector.metrics_buffer) >= 3
+        assert len(collector.metric_buffer) >= 3
     
     @patch("aegis_ai.monitoring.metrics.boto3.client")
     def test_record_input_drift(self, mock_boto3_client):
