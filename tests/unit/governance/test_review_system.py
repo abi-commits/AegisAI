@@ -60,8 +60,8 @@ class TestCaseManager:
         mock_boto3_client.side_effect = client_factory
         
         manager = CaseManager(
-            dynamodb_table="cases",
-            s3_bucket="evidence",
+            cases_table="cases",
+            evidence_bucket="evidence",
         )
         
         evidence = {
@@ -73,9 +73,12 @@ class TestCaseManager:
         
         case_id = manager.create_case(
             decision_id="dec-123",
-            case_type="override_review",
+            session_id="sess-789",
+            user_id="user-123",
+            ai_action="approve",
+            ai_confidence=0.85,
+            reason_for_review="Suspicious pattern detected",
             evidence=evidence,
-            priority="high",
         )
         
         assert case_id is not None
@@ -91,8 +94,8 @@ class TestCaseManager:
         mock_boto3_client.return_value = mock_dynamodb
         
         manager = CaseManager(
-            dynamodb_table="cases",
-            s3_bucket="evidence",
+            cases_table="cases",
+            evidence_bucket="evidence",
         )
         
         result = manager.add_review_action(
@@ -113,8 +116,8 @@ class TestCaseManager:
         mock_boto3_client.return_value = mock_dynamodb
         
         manager = CaseManager(
-            dynamodb_table="cases",
-            s3_bucket="evidence",
+            cases_table="cases",
+            evidence_bucket="evidence",
         )
         
         # Override without comment should fail
@@ -134,8 +137,8 @@ class TestCaseManager:
         mock_boto3_client.return_value = mock_dynamodb
         
         manager = CaseManager(
-            dynamodb_table="cases",
-            s3_bucket="evidence",
+            cases_table="cases",
+            evidence_bucket="evidence",
         )
         
         # Override without new_action should fail
@@ -156,8 +159,8 @@ class TestCaseManager:
         mock_boto3_client.return_value = mock_dynamodb
         
         manager = CaseManager(
-            dynamodb_table="cases",
-            s3_bucket="evidence",
+            cases_table="cases",
+            evidence_bucket="evidence",
         )
         
         result = manager.add_review_action(
@@ -192,8 +195,8 @@ class TestCaseManager:
         mock_dynamodb.get_item.return_value = {"Item": case_data}
         
         manager = CaseManager(
-            dynamodb_table="cases",
-            s3_bucket="evidence",
+            cases_table="cases",
+            evidence_bucket="evidence",
         )
         
         case = manager.get_case("case-123")
@@ -224,8 +227,8 @@ class TestCaseManager:
         }
         
         manager = CaseManager(
-            dynamodb_table="cases",
-            s3_bucket="evidence",
+            cases_table="cases",
+            evidence_bucket="evidence",
         )
         
         cases = manager.get_pending_cases(limit=10)
@@ -253,8 +256,8 @@ class TestCaseManager:
         }
         
         manager = CaseManager(
-            dynamodb_table="cases",
-            s3_bucket="evidence",
+            cases_table="cases",
+            evidence_bucket="evidence",
         )
         
         cases = manager.get_user_cases("user-456", limit=10)
@@ -293,8 +296,8 @@ class TestReviewUIBackend:
         }
         
         backend = ReviewUIBackend(
-            dynamodb_table="cases",
-            s3_bucket="evidence",
+            cases_table="cases",
+            evidence_bucket="evidence",
         )
         
         dashboard = backend.get_review_dashboard()
@@ -310,8 +313,8 @@ class TestReviewUIBackend:
         mock_boto3_client.return_value = mock_dynamodb
         
         backend = ReviewUIBackend(
-            dynamodb_table="cases",
-            s3_bucket="evidence",
+            cases_table="cases",
+            evidence_bucket="evidence",
         )
         
         result = backend.submit_review(

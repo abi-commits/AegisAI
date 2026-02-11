@@ -24,8 +24,8 @@ class TestMetricType:
         assert MetricType.POLICY_VETO_RATE
         assert MetricType.CONFIDENCE_MEAN
         assert MetricType.CONFIDENCE_STD
-        assert MetricType.CONFIDENCE_P95
-        assert MetricType.INPUT_DRIFT
+        assert MetricType.CONFIDENCE_PERCENTILE_95  # Changed from CONFIDENCE_P95
+        assert MetricType.INPUT_DRIFT_DETECTED  # Changed from INPUT_DRIFT
         assert MetricType.DECISION_LATENCY
         assert MetricType.AGENT_ERROR_RATE
 
@@ -78,14 +78,15 @@ class TestMetricsCollector:
             batch_size=20,
         )
         
-        collector.record_metric(
+        metric = MetricPoint(
             metric_name="escalation_rate",
             value=0.05,
             unit="Percent",
             dimensions={"decision_type": "fraud"},
         )
+        collector.record_metric(metric)
         
-        assert len(collector.metrics_buffer) == 1
+        assert len(collector.metric_buffer) == 1
     
     @patch("aegis_ai.monitoring.metrics.boto3.client")
     def test_record_decision(self, mock_boto3_client):
@@ -97,14 +98,14 @@ class TestMetricsCollector:
         
         collector.record_decision(
             decision_id="dec-123",
-            decision_type="fraud",
-            escalated=False,
-            vetoed=False,
+            action="ALLOW",
             confidence=0.85,
             latency_ms=150,
+            was_escalated=False,
+            policy_vetoed=False,
         )
         
-        assert len(collector.metrics_buffer) > 0
+        assert len(collector.metric_buffer) > 0
     
     @patch("aegis_ai.monitoring.metrics.boto3.client")
     def test_record_override(self, mock_boto3_client):
@@ -115,13 +116,12 @@ class TestMetricsCollector:
         collector = MetricsCollector(namespace="AegisAI")
         
         collector.record_override(
-            decision_id="dec-123",
-            original_decision="approve",
-            override_decision="reject",
+            original_action="ALLOW",
+            new_action="BLOCK",
             reviewer_role="supervisor",
         )
         
-        assert len(collector.metrics_buffer) > 0
+        assert len(collector.metric_buffer) > 0
     
     @patch("aegis_ai.monitoring.metrics.boto3.client")
     def test_record_agent_error(self, mock_boto3_client):
@@ -134,10 +134,9 @@ class TestMetricsCollector:
         collector.record_agent_error(
             agent_name="detection",
             error_type="timeout",
-            decision_id="dec-123",
         )
         
-        assert len(collector.metrics_buffer) > 0
+        assert len(collector.metric_buffer) > 0
     
     @patch("aegis_ai.monitoring.metrics.boto3.client")
     def test_record_confidence_distribution(self, mock_boto3_client):
@@ -148,7 +147,7 @@ class TestMetricsCollector:
         collector = MetricsCollector(namespace="AegisAI")
         
         scores = [0.7, 0.75, 0.8, 0.85, 0.9, 0.92, 0.95]
-        collector.record_confidence_distribution(
+        collector.record_confidence_distribution(values=scores)
             scores=scores,
             decision_type="fraud",
         )
@@ -165,11 +164,12 @@ class TestMetricsCollector:
         collector = MetricsCollector(namespace="AegisAI")
         
         collector.record_input_drift(
-            affected_features=["transaction_amount", "user_age"],
+            drift_detected=True,
             drift_magnitude=0.25,
+            affected_features=["transaction_amount", "user_age"],
         )
         
-        assert len(collector.metrics_buffer) > 0
+        assert len(collector.metric_buffer) > 0
     
     @patch("aegis_ai.monitoring.metrics.boto3.client")
     def test_flush(self, mock_boto3_client):
@@ -184,11 +184,12 @@ class TestMetricsCollector:
         
         # Record multiple metrics
         for i in range(10):
-            collector.record_metric(
+            metric = MetricPoint(
                 metric_name=f"metric_{i}",
                 value=float(i),
                 unit="Count",
             )
+            collector.record_metric(metric)
         
         # Flush
         collector.flush()
@@ -209,11 +210,12 @@ class TestMetricsCollector:
         
         # Record 3 metrics
         for i in range(3):
-            collector.record_metric(
+            metric = MetricPoint(
                 metric_name=f"metric_{i}",
                 value=float(i),
                 unit="Count",
             )
+            collector.record_metric(metric)
         
         # Should have triggered auto-flush
         assert mock_cloudwatch.put_metric_data.called
@@ -226,11 +228,12 @@ class TestMetricsCollector:
         
         collector = MetricsCollector(namespace="AegisAI")
         
-        collector.record_metric(
+        metric = MetricPoint(
             metric_name="test",
             value=1.0,
             unit="Count",
         )
+        collector.record_metric(metric)
         
         collector.shutdown()
         
@@ -265,8 +268,8 @@ class TestAlertingThresholds:
     
     def test_latency_thresholds(self):
         """Test latency thresholds."""
-        assert AlertingThresholds.LATENCY_WARNING_MS == 500
-        assert AlertingThresholds.LATENCY_CRITICAL_MS == 2000
+        assert AlertingThresholds.DECISION_LATENCY_WARNING == 500
+        assert AlertingThresholds.DECISION_LATENCY_CRITICAL == 2000
 
 
 class TestAnomalyDetector:
@@ -274,53 +277,51 @@ class TestAnomalyDetector:
     
     def test_detect_spike_above_baseline(self):
         """Test spike detection above 3x baseline."""
-        baseline_values = [1.0, 1.1, 0.9, 1.0, 1.1]
-        current_value = 5.0  # 5x baseline, should trigger
+        historical_mean = 1.0
+        current_rate = 5.0  # 5x baseline, should trigger
         
-        is_anomaly = AnomalyDetector.detect_spike(
-            current_value=current_value,
-            baseline_values=baseline_values,
-            threshold_multiplier=3,
+        is_anomaly = AnomalyDetector.is_escalation_spike(
+            current_rate=current_rate,
+            historical_mean=historical_mean,
         )
         
         assert is_anomaly is True
     
     def test_detect_spike_within_threshold(self):
         """Test spike detection within threshold."""
-        baseline_values = [1.0, 1.1, 0.9, 1.0, 1.1]
-        current_value = 2.0  # ~2x baseline, should not trigger
+        historical_mean = 1.0
+        current_rate = 2.0  # ~2x baseline, should not trigger
         
-        is_anomaly = AnomalyDetector.detect_spike(
-            current_value=current_value,
-            baseline_values=baseline_values,
-            threshold_multiplier=3,
+        is_anomaly = AnomalyDetector.is_escalation_spike(
+            current_rate=current_rate,
+            historical_mean=historical_mean,
         )
         
         assert is_anomaly is False
     
     def test_detect_confidence_anomaly_low(self):
         """Test confidence anomaly - too low."""
-        is_anomaly = AnomalyDetector.detect_confidence_anomaly(0.2)
+        is_anomaly = AnomalyDetector.is_confidence_anomaly(0.2)
         assert is_anomaly is True
     
     def test_detect_confidence_anomaly_high(self):
         """Test confidence anomaly - too high."""
-        is_anomaly = AnomalyDetector.detect_confidence_anomaly(0.99)
+        is_anomaly = AnomalyDetector.is_confidence_anomaly(0.99)
         assert is_anomaly is True
     
     def test_detect_confidence_anomaly_normal(self):
         """Test confidence anomaly - normal range."""
-        is_anomaly = AnomalyDetector.detect_confidence_anomaly(0.65)
+        is_anomaly = AnomalyDetector.is_confidence_anomaly(0.65)
         assert is_anomaly is False
     
     def test_detect_latency_anomaly(self):
         """Test latency anomaly detection."""
-        p95_baseline_ms = 200
-        current_latency_ms = 500  # 2.5x baseline, should trigger
+        p95_latency = 200
+        current_latency_ms = 500  # 2.5x p95, should trigger
         
-        is_anomaly = AnomalyDetector.detect_latency_anomaly(
-            current_latency_ms=current_latency_ms,
-            p95_baseline_ms=p95_baseline_ms,
+        is_anomaly = AnomalyDetector.is_latency_anomaly(
+            latency_ms=current_latency_ms,
+            p95_latency=p95_latency,
         )
         
         assert is_anomaly is True

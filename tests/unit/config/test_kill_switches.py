@@ -71,8 +71,10 @@ class TestDynamicConfig:
         """Test getting nonexistent key returns provided default."""
         config = DynamicConfig(source=ConfigSource.ENVIRONMENT)
         
+        # Key exists in DEFAULTS, so it returns default value
         assert config.get("nonexistent_key", "fallback") == "fallback"
-        assert config.get("nonexistent_key") is None
+        # Key not in DEFAULTS, so it returns None
+        assert config.get("truly_nonexistent_key_xyz_123") is None
     
     def test_get_environment_variable(self):
         """Test getting value from environment variable."""

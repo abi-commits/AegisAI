@@ -28,7 +28,12 @@ class TestFeatureSchema:
             "geographic_risk": {"type": "categorical", "values": ["low", "medium", "high"]},
         }
         
-        schema = FeatureSchema(features=features)
+        schema = FeatureSchema(
+            model_type="detection",
+            features=features,
+            version="1.0.0",
+            timestamp="2026-01-28T00:00:00Z"
+        )
         assert schema.features == features
     
     def test_feature_schema_hash(self):
@@ -38,8 +43,18 @@ class TestFeatureSchema:
             "transaction_amount": {"type": "float"},
         }
         
-        schema1 = FeatureSchema(features=features)
-        schema2 = FeatureSchema(features=features)
+        schema1 = FeatureSchema(
+            model_type="detection",
+            features=features,
+            version="1.0.0",
+            timestamp="2026-01-28T00:00:00Z"
+        )
+        schema2 = FeatureSchema(
+            model_type="detection",
+            features=features,
+            version="1.0.0",
+            timestamp="2026-01-28T00:00:00Z"
+        )
         
         # Same features should produce same hash
         assert schema1.compute_hash() == schema2.compute_hash()
@@ -51,7 +66,12 @@ class TestFeatureSchema:
             "b": {"type": "int"},
         }
         
-        schema = FeatureSchema(features=features)
+        schema = FeatureSchema(
+            model_type="detection",
+            features=features,
+            version="1.0.0",
+            timestamp="2026-01-28T00:00:00Z"
+        )
         hash1 = schema.compute_hash()
         hash2 = schema.compute_hash()
         
@@ -59,8 +79,18 @@ class TestFeatureSchema:
     
     def test_feature_schema_hash_changes_with_content(self):
         """Test that hash changes when features change."""
-        schema1 = FeatureSchema(features={"a": {"type": "float"}})
-        schema2 = FeatureSchema(features={"b": {"type": "float"}})
+        schema1 = FeatureSchema(
+            model_type="detection",
+            features={"a": {"type": "float"}},
+            version="1.0.0",
+            timestamp="2026-01-28T00:00:00Z"
+        )
+        schema2 = FeatureSchema(
+            model_type="detection",
+            features={"b": {"type": "float"}},
+            version="1.0.0",
+            timestamp="2026-01-28T00:00:00Z"
+        )
         
         # Different features should produce different hashes
         assert schema1.compute_hash() != schema2.compute_hash()
@@ -72,7 +102,12 @@ class TestModelArtifact:
     def test_model_artifact_creation(self):
         """Test creating a model artifact."""
         features = {"user_score": {"type": "float"}}
-        schema = FeatureSchema(features=features)
+        schema = FeatureSchema(
+            model_type="detection",
+            features=features,
+            version="1.0.0",
+            timestamp="2026-01-28T00:00:00Z"
+        )
         
         artifact = ModelArtifact(
             model_id="fraud-detection-v1",
@@ -95,7 +130,12 @@ class TestModelArtifact:
     def test_model_artifact_to_dict(self):
         """Test converting artifact to dict."""
         features = {"user_score": {"type": "float"}}
-        schema = FeatureSchema(features=features)
+        schema = FeatureSchema(
+            model_type="detection",
+            features=features,
+            version="1.0.0",
+            timestamp="2026-01-28T00:00:00Z"
+        )
         
         artifact = ModelArtifact(
             model_id="test-model",
@@ -124,10 +164,15 @@ class TestModelRegistry:
         mock_boto3_client.return_value = mock_s3
         mock_s3.head_object.side_effect = Exception("Not found")  # Version doesn't exist
         
-        registry = ModelRegistry(bucket="test-bucket")
+        registry = ModelRegistry(bucket_name="test-bucket")
         
         features = {"score": {"type": "float"}}
-        schema = FeatureSchema(features=features)
+        schema = FeatureSchema(
+            model_type="detection",
+            features=features,
+            version="1.0.0",
+            timestamp="2026-01-28T00:00:00Z"
+        )
         
         artifact = ModelArtifact(
             model_id="test-model",
@@ -152,7 +197,12 @@ class TestModelRegistry:
         
         # Mock the get_object response
         features = {"score": {"type": "float"}}
-        schema = FeatureSchema(features=features)
+        schema = FeatureSchema(
+            model_type="detection",
+            features=features,
+            version="1.0.0",
+            timestamp="2026-01-28T00:00:00Z"
+        )
         
         artifact = ModelArtifact(
             model_id="test-model",
@@ -170,7 +220,7 @@ class TestModelRegistry:
         }
         mock_s3.get_object.return_value = mock_response
         
-        registry = ModelRegistry(bucket="test-bucket")
+        registry = ModelRegistry(bucket_name="test-bucket")
         result = registry.get_model(ModelType.DETECTION, "test-model", "1.0.0")
         
         assert result is not None
@@ -191,7 +241,7 @@ class TestModelRegistry:
             ],
         }
         
-        registry = ModelRegistry(bucket="test-bucket")
+        registry = ModelRegistry(bucket_name="test-bucket")
         versions = registry.list_versions(ModelType.DETECTION, "test-model")
         
         assert len(versions) == 3
@@ -203,7 +253,12 @@ class TestDecisionModelTrace:
     def test_create_trace(self):
         """Test creating a decision model trace."""
         features = {"score": {"type": "float"}}
-        schema = FeatureSchema(features=features)
+        schema = FeatureSchema(
+            model_type="detection",
+            features=features,
+            version="1.0.0",
+            timestamp="2026-01-28T00:00:00Z"
+        )
         
         artifact = ModelArtifact(
             model_id="test-model",
@@ -231,7 +286,12 @@ class TestDecisionModelTrace:
     def test_trace_to_dict(self):
         """Test converting trace to dict."""
         features = {"score": {"type": "float"}}
-        schema = FeatureSchema(features=features)
+        schema = FeatureSchema(
+            model_type="detection",
+            features=features,
+            version="1.0.0",
+            timestamp="2026-01-28T00:00:00Z"
+        )
         
         artifact = ModelArtifact(
             model_id="test-model",
