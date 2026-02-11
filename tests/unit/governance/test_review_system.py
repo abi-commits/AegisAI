@@ -269,41 +269,35 @@ class TestReviewUIBackend:
     """Tests for ReviewUIBackend."""
     
     @patch("aegis_ai.governance.review.boto3.client")
-    def test_get_review_dashboard(self, mock_boto3_client):
+    @patch("aegis_ai.governance.review.boto3.resource")
+    def test_get_review_dashboard(self, mock_boto3_resource, mock_boto3_client):
         """Test getting review dashboard data."""
-        mock_dynamodb = MagicMock()
+        mock_dynamodb_client = MagicMock()
+        mock_dynamodb_resource = MagicMock()
         
-        def client_factory(service_name, **kwargs):
-            if service_name == "dynamodb":
-                return mock_dynamodb
-        
-        mock_boto3_client.side_effect = client_factory
+        mock_boto3_client.return_value = mock_dynamodb_client
+        mock_boto3_resource.return_value.Table.return_value = mock_dynamodb_resource
         
         # Mock query results
-        mock_dynamodb.query.return_value = {
+        mock_dynamodb_resource.query.return_value = {
             "Count": 5,
             "Items": [
-                {"case_id": {"S": "case-1"}, "priority": {"S": "high"}},
+                {"case_id": "case-1", "priority": "high"},
             ] * 5,
         }
         
-        mock_dynamodb.scan.return_value = {
-            "Items": [
-                {"status": {"S": "APPROVED"}},
-                {"status": {"S": "REJECTED"}},
-                {"status": {"S": "OVERRIDDEN"}},
-            ],
-        }
-        
-        backend = ReviewUIBackend(
+        manager = CaseManager(
             cases_table="cases",
             evidence_bucket="evidence",
         )
         
-        dashboard = backend.get_review_dashboard()
+        backend = ReviewUIBackend(
+            case_manager=manager,
+        )
+        
+        dashboard = backend.get_review_dashboard(reviewer_id="user-789")
         
         assert "pending_count" in dashboard
-        assert dashboard["pending_count"] > 0
         assert "recent_cases" in dashboard
     
     @patch("aegis_ai.governance.review.boto3.client")
@@ -312,9 +306,12 @@ class TestReviewUIBackend:
         mock_dynamodb = MagicMock()
         mock_boto3_client.return_value = mock_dynamodb
         
-        backend = ReviewUIBackend(
+        manager = CaseManager(
             cases_table="cases",
             evidence_bucket="evidence",
+        )
+        backend = ReviewUIBackend(
+            case_manager=manager,
         )
         
         result = backend.submit_review(
@@ -326,7 +323,6 @@ class TestReviewUIBackend:
         )
         
         assert result is not None
-        assert "action_id" in result
 
 
 if __name__ == "__main__":

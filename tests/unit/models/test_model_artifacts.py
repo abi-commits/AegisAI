@@ -119,7 +119,11 @@ class TestModelArtifact:
             performance_metrics={"precision": 0.95, "recall": 0.92},
             training_data_hash="abc123",
             framework="xgboost",
+            python_version="3.11",
+            framework_version="2.0.0",
+            created_at="2026-01-28T00:00:00Z",
             created_by="data-team",
+            policy_version="policy-v1",
         )
         
         assert artifact.model_id == "fraud-detection-v1"
@@ -143,7 +147,15 @@ class TestModelArtifact:
             model_type=ModelType.DETECTION,
             artifact_uri="s3://models/test.pkl",
             feature_schema=schema,
+            hyperparameters={},
+            performance_metrics={},
+            training_data_hash="hash123",
+            framework="sklearn",
+            python_version="3.11",
+            framework_version="1.0.0",
+            created_at="2026-01-28T00:00:00Z",
             created_by="test",
+            policy_version="v1",
         )
         
         artifact_dict = artifact.to_dict()
@@ -180,7 +192,15 @@ class TestModelRegistry:
             model_type=ModelType.DETECTION,
             artifact_uri="s3://models/test.pkl",
             feature_schema=schema,
+            hyperparameters={},
+            performance_metrics={},
+            training_data_hash="hash",
+            framework="sklearn",
+            python_version="3.11",
+            framework_version="1.0.0",
+            created_at="2026-01-28T00:00:00Z",
             created_by="test",
+            policy_version="v1",
         )
         
         result = registry.register_model(artifact)
@@ -208,6 +228,18 @@ class TestModelRegistry:
             model_id="test-model",
             version="1.0.0",
             model_type=ModelType.DETECTION,
+            artifact_uri="s3://models/test.pkl",
+            feature_schema=schema,
+            hyperparameters={},
+            performance_metrics={},
+            training_data_hash="hash",
+            framework="sklearn",
+            python_version="3.11",
+            framework_version="1.0.0",
+            created_at="2026-01-28T00:00:00Z",
+            created_by="test",
+            policy_version="v1",
+        )
             artifact_uri="s3://models/test.pkl",
             feature_schema=schema,
             created_by="test",
@@ -266,7 +298,15 @@ class TestDecisionModelTrace:
             model_type=ModelType.DETECTION,
             artifact_uri="s3://models/test.pkl",
             feature_schema=schema,
+            hyperparameters={},
+            performance_metrics={},
+            training_data_hash="hash",
+            framework="sklearn",
+            python_version="3.11",
+            framework_version="1.0.0",
+            created_at="2026-01-28T00:00:00Z",
             created_by="test",
+            policy_version="v1",
         )
         
         trace = DecisionModelTrace.create_trace(
@@ -298,6 +338,17 @@ class TestDecisionModelTrace:
             version="1.0.0",
             model_type=ModelType.DETECTION,
             artifact_uri="s3://models/test.pkl",
+            feature_schema=schema,
+            hyperparameters={},
+            performance_metrics={},
+            training_data_hash="hash",
+            framework="sklearn",
+            python_version="3.11",
+            framework_version="1.0.0",
+            created_at="2026-01-28T00:00:00Z",
+            created_by="test",
+            policy_version="v1",
+        )
             feature_schema=schema,
             created_by="test",
         )

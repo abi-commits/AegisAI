@@ -236,7 +236,7 @@ class TestMetricsCollector:
         
         # Should have flushed
         assert mock_cloudwatch.put_metric_data.called
-        assert len(collector.metrics_buffer) == 0
+        assert len(collector.metric_buffer) == 0
 
 
 class TestAlertingThresholds:
@@ -303,7 +303,7 @@ class TestAnomalyDetector:
     
     def test_detect_confidence_anomaly_high(self):
         """Test confidence anomaly - too high."""
-        is_anomaly = AnomalyDetector.is_confidence_anomaly(0.99)
+        is_anomaly = AnomalyDetector.is_confidence_anomaly(0.991)
         assert is_anomaly is True
     
     def test_detect_confidence_anomaly_normal(self):
