@@ -8,12 +8,12 @@ Testing discipline: Light but mandatory.
 
 import pytest
 
-from src.aegis_ai.agents.explanation.agent import ExplanationAgent
-from src.aegis_ai.agents.explanation.schema import ExplanationOutput
-from src.aegis_ai.agents.detection.schema import DetectionOutput
-from src.aegis_ai.agents.behavior.schema import BehavioralOutput
-from src.aegis_ai.agents.network.schema import NetworkOutput
-from src.aegis_ai.agents.confidence.schema import ConfidenceOutput
+from aegis_ai.agents.explanation.agent import ExplanationAgent
+from aegis_ai.agents.explanation.schema import ExplanationOutput
+from aegis_ai.agents.detection.schema import DetectionOutput
+from aegis_ai.agents.behavior.schema import BehavioralOutput
+from aegis_ai.agents.network.schema import NetworkOutput
+from aegis_ai.agents.confidence.schema import ConfidenceOutput
 
 
 @pytest.fixture

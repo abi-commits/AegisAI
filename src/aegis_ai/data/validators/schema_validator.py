@@ -6,7 +6,7 @@ Provides validation functions for all data entities.
 from typing import List, Dict, Any, Optional, Union
 from pydantic import ValidationError
 
-from src.aegis_ai.data.schemas import (
+from aegis_ai.data.schemas import (
     User,
     Device,
     Session,

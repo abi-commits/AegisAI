@@ -1,10 +1,10 @@
 """Legitimate login scenario generator."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Tuple, Optional
 
-from src.aegis_ai.data.schemas import User, Device, Session, LoginEvent
-from src.aegis_ai.data.generators.base_generator import BaseGenerator
+from aegis_ai.data.schemas import User, Device, Session, LoginEvent
+from aegis_ai.data.generators.base_generator import BaseGenerator
 
 
 class LegitLoginGenerator(BaseGenerator):
@@ -38,7 +38,7 @@ class LegitLoginGenerator(BaseGenerator):
                 is_mobile = i > 0 and self._random_bool(0.5)  # First device usually desktop
                 device = self.generate_device(is_mobile=is_mobile)
                 device.is_known = True
-                device.first_seen_at = datetime.utcnow() - timedelta(days=self._random_int(30, 365))
+                device.first_seen_at = datetime.now(timezone.utc) - timedelta(days=self._random_int(30, 365))
                 devices.append(device)
             self._user_devices[user.user_id] = devices
         

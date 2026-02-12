@@ -9,15 +9,15 @@ Key design:
 - GraphSAGE for scalability and handling new nodes
 """
 
-from src.aegis_ai.models.graph.schema import (
+from aegis_ai.models.graph.schema import (
     NodeType,
     EdgeType,
     GraphNode,
     GraphEdge,
     FraudGraph,
 )
-from src.aegis_ai.models.graph.builder import GraphBuilder
-from src.aegis_ai.models.graph.sage_model import (
+from aegis_ai.models.graph.builder import GraphBuilder
+from aegis_ai.models.graph.sage_model import (
     GraphSAGEModel,
     GraphSAGEConfig,
 )

@@ -18,11 +18,11 @@ This agent thinks. It does not act.
 from pathlib import Path
 from typing import Optional, Any
 
-from src.aegis_ai.data.schemas.login_event import LoginEvent
-from src.aegis_ai.data.schemas.session import Session
-from src.aegis_ai.data.schemas.user import User
-from src.aegis_ai.data.schemas.device import Device
-from src.aegis_ai.agents.behavior.schema import BehavioralOutput
+from aegis_ai.data.schemas.login_event import LoginEvent
+from aegis_ai.data.schemas.session import Session
+from aegis_ai.data.schemas.user import User
+from aegis_ai.data.schemas.device import Device
+from aegis_ai.agents.behavior.schema import BehavioralOutput
 
 
 class BehaviorAgent:
@@ -95,7 +95,7 @@ class BehaviorAgent:
             return False
         
         try:
-            from src.aegis_ai.models.behavior import (
+            from aegis_ai.models.behavior import (
                 BehavioralProfiler,
                 DistanceMethod,
             )

@@ -1,8 +1,8 @@
 """Test fixtures for AegisAI."""
 
 import pytest
-from datetime import datetime
-from src.aegis_ai.core.types import LoginEvent
+from datetime import datetime, timezone
+from aegis_ai.core.types import LoginEvent
 
 
 @pytest.fixture
@@ -15,7 +15,7 @@ def sample_login_event():
         device_id="test_device_1",
         ip_address="192.168.1.1",
         geo_location="Test City",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         success=True,
     )
 
@@ -30,7 +30,7 @@ def sample_suspicious_event():
         device_id="unknown_device",
         ip_address="203.0.113.0",  # Example IP from different region
         geo_location="Unknown Location",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         success=False,
         additional_context={"failed_attempts": 5},
     )

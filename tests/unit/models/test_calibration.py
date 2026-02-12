@@ -8,7 +8,7 @@ Testing discipline: Light but mandatory.
 
 import pytest
 
-from src.aegis_ai.models.calibration.confidence import (
+from aegis_ai.models.calibration.confidence import (
     ConfidenceCalibrator,
     CalibrationResult,
     EscalationMetrics,
@@ -138,7 +138,7 @@ class TestPlattCalibrator:
     def test_platt_calibrator_fit_and_calibrate(self):
         """Platt calibrator should fit and calibrate probabilities."""
         import numpy as np
-        from src.aegis_ai.models.calibration.platt import PlattCalibrator
+        from aegis_ai.models.calibration.platt import PlattCalibrator
         
         calibrator = PlattCalibrator()
         
@@ -159,7 +159,7 @@ class TestPlattCalibrator:
     def test_platt_single_calibration(self):
         """Platt calibrator should handle single value calibration."""
         import numpy as np
-        from src.aegis_ai.models.calibration.platt import PlattCalibrator
+        from aegis_ai.models.calibration.platt import PlattCalibrator
         
         calibrator = PlattCalibrator()
         

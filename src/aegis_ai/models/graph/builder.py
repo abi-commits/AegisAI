@@ -10,17 +10,21 @@ import hashlib
 
 import numpy as np
 
-from src.aegis_ai.data.schemas.login_event import LoginEvent
-from src.aegis_ai.data.schemas.session import Session
-from src.aegis_ai.data.schemas.device import Device
-from src.aegis_ai.data.schemas.user import User
-from src.aegis_ai.models.graph.schema import (
+from aegis_ai.data.schemas.login_event import LoginEvent
+from aegis_ai.data.schemas.session import Session
+from aegis_ai.data.schemas.device import Device
+from aegis_ai.data.schemas.user import User
+from aegis_ai.models.graph.schema import (
     NodeType,
     EdgeType,
     GraphNode,
     GraphEdge,
     FraudGraph,
 )
+
+# Feature normalization constants
+ACCOUNT_NORMALIZATION_FACTOR = 10.0
+IP_NORMALIZATION_FACTOR = 10.0
 
 
 @dataclass
@@ -192,7 +196,7 @@ class GraphBuilder:
         
         # Feature 0: number of accounts sharing this IP (normalized)
         num_accounts = len(self._ip_account_counts[ip_address])
-        features[0] = min(num_accounts / 10.0, 1.0)
+        features[0] = min(num_accounts / IP_NORMALIZATION_FACTOR, 1.0)
         
         # Feature 1: is VPN
         features[1] = 1.0 if session.is_vpn else 0.0
@@ -334,7 +338,7 @@ class GraphBuilder:
         self._ip_account_counts[ip_address].add(user_id)
         
         ip_features = np.zeros(self.config.ip_feature_dim, dtype=np.float32)
-        ip_features[0] = min(len(self._ip_account_counts[ip_address]) / 10.0, 1.0)
+        ip_features[0] = min(len(self._ip_account_counts[ip_address]) / IP_NORMALIZATION_FACTOR, 1.0)
         ip_features[1] = 1.0 if is_vpn else 0.0
         ip_features[2] = 1.0 if is_tor else 0.0
         

@@ -13,11 +13,11 @@ Phase 4 additions:
 import pytest
 from datetime import datetime
 
-from src.aegis_ai.agents.detection.agent import DetectionAgent
-from src.aegis_ai.agents.detection.schema import DetectionOutput
-from src.aegis_ai.data.schemas.login_event import LoginEvent
-from src.aegis_ai.data.schemas.session import Session, GeoLocation
-from src.aegis_ai.data.schemas.device import Device
+from aegis_ai.agents.detection.agent import DetectionAgent
+from aegis_ai.agents.detection.schema import DetectionOutput
+from aegis_ai.data.schemas.login_event import LoginEvent
+from aegis_ai.data.schemas.session import Session, GeoLocation
+from aegis_ai.data.schemas.device import Device
 
 
 @pytest.fixture

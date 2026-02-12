@@ -7,17 +7,17 @@ Key insight: No fraud labels required.
 This answers: "Does this look like the same human?"
 """
 
-from src.aegis_ai.models.behavior.profile import (
+from aegis_ai.models.behavior.profile import (
     BehavioralProfile,
     ProfileConfig,
     SessionEmbedding,
 )
-from src.aegis_ai.models.behavior.distance import (
+from aegis_ai.models.behavior.distance import (
     DistanceCalculator,
     DistanceMethod,
     AnomalyScore,
 )
-from src.aegis_ai.models.behavior.profiler import BehavioralProfiler
+from aegis_ai.models.behavior.profiler import BehavioralProfiler
 
 __all__ = [
     "BehavioralProfile",

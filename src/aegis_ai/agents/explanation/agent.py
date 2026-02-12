@@ -1,87 +1,26 @@
-"""Explanation Agent - Translator, Not Thinker.
+"""Explanation Agent - Translator, not thinker."""
 
-Phase 4 Upgrades:
-- SHAP top features from Detection Agent
-- Behavioral deviations from Behavior Agent
-- Network evidence counts from Network Agent
-"""
-
-from typing import Any, Literal, Optional
-from src.aegis_ai.agents.detection.schema import DetectionOutput
-from src.aegis_ai.agents.behavior.schema import BehavioralOutput
-from src.aegis_ai.agents.network.schema import NetworkOutput
-from src.aegis_ai.agents.confidence.schema import ConfidenceOutput
-from src.aegis_ai.agents.explanation.schema import (
-    ExplanationOutput,
-    SHAPContribution,
-    BehavioralDeviation,
-    NetworkEvidence,
+from typing import Any, Optional
+from aegis_ai.agents.detection.schema import DetectionOutput
+from aegis_ai.agents.behavior.schema import BehavioralOutput
+from aegis_ai.agents.network.schema import NetworkOutput
+from aegis_ai.agents.confidence.schema import ConfidenceOutput
+from aegis_ai.agents.explanation.schema import (
+    ExplanationOutput, SHAPContribution, BehavioralDeviation, NetworkEvidence,
+)
+from aegis_ai.agents.explanation.templates import (
+    TEMPLATES, ACTION_TEMPLATES, FEATURE_DESCRIPTIONS, BEHAVIORAL_DESCRIPTIONS
 )
 
 
 class ExplanationAgent:
-    """Explanation Agent - Translator, Not Thinker.
-    """
+    """Explanation Agent - Translator, not thinker."""
     
-    # Action thresholds based on aggregated risk
-    HIGH_RISK_THRESHOLD = 0.70  # block
-    MEDIUM_RISK_THRESHOLD = 0.45  # challenge
-    ELEVATED_RISK_THRESHOLD = 0.25  # escalate
+    HIGH_RISK_THRESHOLD = 0.70
+    MEDIUM_RISK_THRESHOLD = 0.45
+    ELEVATED_RISK_THRESHOLD = 0.25
     
-    # Template phrases for explanations
-    TEMPLATES = {
-        "new_device": "This login is from a new device not previously associated with this account.",
-        "new_location": "This login originates from a new geographic location.",
-        "new_ip": "This login is from a new IP address.",
-        "behavioral_deviation": "This session deviates from the user's typical behavioral patterns.",
-        "network_risk": "Network analysis indicates shared infrastructure with other accounts.",
-        "time_anomaly": "This login occurred outside the user's typical hours.",
-        "vpn_tor": "This connection uses anonymization technology.",
-        "high_velocity": "Multiple login attempts were detected in a short period.",
-        "low_confidence": "Due to uncertainty in the analysis, additional verification is recommended.",
-        "agent_disagreement": "Analysis signals show conflicting indicators.",
-    }
-    
-    # Action descriptions
-    ACTION_TEMPLATES = {
-        "allow": "No additional verification required. Login may proceed.",
-        "challenge": "Additional verification is recommended before allowing access.",
-        "escalate": "This case requires human review before proceeding.",
-        "block": "Access should be temporarily blocked pending verification.",
-    }
-    
-    # Feature to human-readable mappings for SHAP
-    FEATURE_DESCRIPTIONS = {
-        "is_new_device": "First-time device increases risk",
-        "device_not_known": "Unknown device increases risk",
-        "is_new_ip": "New IP address increases risk",
-        "is_new_location": "Login from new geographic location increases risk",
-        "is_vpn": "VPN usage increases risk",
-        "is_tor": "Tor network usage significantly increases risk",
-        "failed_attempts_before": "Failed login attempts before this session",
-        "failed_attempts_capped": "High number of failed attempts detected",
-        "time_since_last_login_hours": "Time since last login",
-        "is_long_absence": "Extended absence from account increases risk",
-        "auth_method_password": "Password authentication used",
-        "auth_method_mfa": "Multi-factor authentication used",
-        "auth_method_sso": "Single sign-on authentication used",
-        "auth_method_biometric": "Biometric authentication used",
-    }
-    
-    # Behavioral deviation types to descriptions
-    BEHAVIORAL_DESCRIPTIONS = {
-        "time": "Login time differs from typical pattern",
-        "device": "Device usage differs from typical pattern",
-        "browser": "Browser usage differs from typical pattern",
-        "location": "Login location differs from typical pattern",
-        "velocity": "Login frequency differs from typical pattern",
-    }
-    
-    def __init__(
-        self,
-        shap_explanation: Optional[Any] = None
-    ):
-        """Initialize Explanation Agent."""
+    def __init__(self, shap_explanation: Optional[Any] = None):
         self._shap_explanation = shap_explanation
     
     def generate(
@@ -171,12 +110,11 @@ class ExplanationAgent:
                 )
                 
                 for feature_name, shap_value in top_contributors:
-                    # Only include if we have a known description
-                    if feature_name in self.FEATURE_DESCRIPTIONS:
+                    if feature_name in FEATURE_DESCRIPTIONS:
                         contributions.append(SHAPContribution(
                             feature_name=feature_name,
                             contribution=round(float(shap_value), 4),
-                            human_readable=self.FEATURE_DESCRIPTIONS[feature_name]
+                            human_readable=FEATURE_DESCRIPTIONS[feature_name]
                         ))
             except (AttributeError, TypeError):
                 # SHAP explanation doesn't have expected interface
@@ -190,11 +128,11 @@ class ExplanationAgent:
             
             for factor in detection_output.risk_factors[:5]:
                 feature_name = self._factor_to_feature(factor)
-                if feature_name and feature_name in self.FEATURE_DESCRIPTIONS:
+                if feature_name and feature_name in FEATURE_DESCRIPTIONS:
                     contributions.append(SHAPContribution(
                         feature_name=feature_name,
                         contribution=round(weight, 4),
-                        human_readable=self.FEATURE_DESCRIPTIONS[feature_name]
+                        human_readable=FEATURE_DESCRIPTIONS[feature_name]
                     ))
         
         return contributions[:5]  # Max 5 contributions
@@ -241,23 +179,23 @@ class ExplanationAgent:
             
             if "time" in deviation_lower or "hour" in deviation_lower:
                 deviation_type = "time_anomaly"
-                description = self.BEHAVIORAL_DESCRIPTIONS.get("time", deviation_str)
+                description = BEHAVIORAL_DESCRIPTIONS.get("time", deviation_str)
                 severity = "medium"
             elif "device" in deviation_lower:
                 deviation_type = "device_change"
-                description = self.BEHAVIORAL_DESCRIPTIONS.get("device", deviation_str)
+                description = BEHAVIORAL_DESCRIPTIONS.get("device", deviation_str)
                 severity = "medium"
             elif "browser" in deviation_lower:
                 deviation_type = "browser_change"
-                description = self.BEHAVIORAL_DESCRIPTIONS.get("browser", deviation_str)
+                description = BEHAVIORAL_DESCRIPTIONS.get("browser", deviation_str)
                 severity = "low"
             elif "location" in deviation_lower or "country" in deviation_lower:
                 deviation_type = "location_change"
-                description = self.BEHAVIORAL_DESCRIPTIONS.get("location", deviation_str)
+                description = BEHAVIORAL_DESCRIPTIONS.get("location", deviation_str)
                 severity = "high"
             elif "velocity" in deviation_lower or "frequency" in deviation_lower:
                 deviation_type = "velocity_anomaly"
-                description = self.BEHAVIORAL_DESCRIPTIONS.get("velocity", deviation_str)
+                description = BEHAVIORAL_DESCRIPTIONS.get("velocity", deviation_str)
                 severity = "high"
             
             # Only add if we could determine a type (traceable)
@@ -328,12 +266,9 @@ class ExplanationAgent:
     ) -> bool:
         """Verify all explanation components are traceable to signals."""
     
-        # All SHAP contributions must map to known features
         for contrib in shap_contributions:
-            if contrib.feature_name not in self.FEATURE_DESCRIPTIONS:
+            if contrib.feature_name not in FEATURE_DESCRIPTIONS:
                 return False
-        
-        # All behavioral deviations must have a type
         for deviation in behavioral_deviations:
             if not deviation.deviation_type:
                 return False
@@ -403,37 +338,32 @@ class ExplanationAgent:
         """Build deterministic explanation from templates."""
         parts: list[str] = []
         
-        # Detection factors
         for factor in detection.risk_factors:
             if "new_device" in factor:
-                parts.append(self.TEMPLATES["new_device"])
+                parts.append(TEMPLATES["new_device"])
             elif "new_country" in factor or "new_location" in factor:
-                parts.append(self.TEMPLATES["new_location"])
+                parts.append(TEMPLATES["new_location"])
             elif "new_ip" in factor:
-                parts.append(self.TEMPLATES["new_ip"])
+                parts.append(TEMPLATES["new_ip"])
             elif "velocity" in factor or "failed_attempts" in factor:
-                parts.append(self.TEMPLATES["high_velocity"])
+                parts.append(TEMPLATES["high_velocity"])
             elif "vpn" in factor or "tor" in factor:
-                parts.append(self.TEMPLATES["vpn_tor"])
+                parts.append(TEMPLATES["vpn_tor"])
         
-        # Behavioral deviations
         if behavioral.deviation_summary:
             if any("time" in d for d in behavioral.deviation_summary):
-                parts.append(self.TEMPLATES["time_anomaly"])
+                parts.append(TEMPLATES["time_anomaly"])
             if len(behavioral.deviation_summary) > 1:
-                parts.append(self.TEMPLATES["behavioral_deviation"])
+                parts.append(TEMPLATES["behavioral_deviation"])
         
-        # Network evidence
         if network.evidence_links:
-            parts.append(self.TEMPLATES["network_risk"])
+            parts.append(TEMPLATES["network_risk"])
         
-        # Confidence concerns
         if confidence.decision_permission == "HUMAN_REQUIRED":
-            parts.append(self.TEMPLATES["low_confidence"])
+            parts.append(TEMPLATES["low_confidence"])
         if confidence.disagreement_score > 0.3:
-            parts.append(self.TEMPLATES["agent_disagreement"])
+            parts.append(TEMPLATES["agent_disagreement"])
         
-        # Remove duplicates while preserving order
         seen = set()
         unique_parts = []
         for part in parts:
@@ -441,8 +371,7 @@ class ExplanationAgent:
                 seen.add(part)
                 unique_parts.append(part)
         
-        # Add action template
-        action_text = self.ACTION_TEMPLATES.get(action, "")
+        action_text = ACTION_TEMPLATES.get(action, "")
         
         # Combine into final explanation
         if unique_parts:

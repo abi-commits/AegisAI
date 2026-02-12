@@ -1,0 +1,149 @@
+services:
+  # ============================================
+  # AegisAI API Service
+  # ============================================
+  aegis-api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: production
+    image: aegis-ai:latest
+    container_name: aegis-api
+    restart: unless-stopped
+    ports:
+      - "${AEGIS_API_PORT:-8000}:8000"
+    environment:
+      - AEGIS_ENVIRONMENT=${AEGIS_ENVIRONMENT:-production}
+      - AEGIS_LOG_LEVEL=${AEGIS_LOG_LEVEL:-INFO}
+      - AEGIS_DEBUG=${AEGIS_DEBUG:-false}
+      - AEGIS_API_HOST=0.0.0.0
+      - AEGIS_API_PORT=8000
+      - AEGIS_WORKERS=${AEGIS_WORKERS:-2}
+      - AEGIS_ENABLE_DOCS=${AEGIS_ENABLE_DOCS:-true}
+      - AEGIS_CORS_ORIGINS=${AEGIS_CORS_ORIGINS:-}
+      - AEGIS_POLICY_VERSION=${AEGIS_POLICY_VERSION:-1.0.0}
+      # AWS credentials for audit storage (if using S3/DynamoDB)
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_REGION=${AWS_REGION:-ap-south-1}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-ap-south-1}
+      # Audit configuration (both naming conventions)
+      - AEGIS_AUDIT_STORAGE_TYPE=${AEGIS_AUDIT_STORAGE_TYPE:-local}
+      - AUDIT_STORAGE_TYPE=${AUDIT_STORAGE_TYPE:-local}
+      - AEGIS_AUDIT_S3_BUCKET=${AEGIS_AUDIT_S3_BUCKET:-}
+      - S3_AUDIT_BUCKET=${S3_AUDIT_BUCKET:-}
+      - S3_AUDIT_PREFIX=${S3_AUDIT_PREFIX:-audit-logs/}
+      - AEGIS_AUDIT_DYNAMODB_TABLE=${AEGIS_AUDIT_DYNAMODB_TABLE:-}
+      # Model registry
+      - S3_MODEL_REGISTRY_BUCKET=${S3_MODEL_REGISTRY_BUCKET:-}
+    volumes:
+      # Persist audit logs
+      - aegis-logs:/app/logs
+      # Mount config for runtime updates (optional)
+      - ./config:/app/config:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - aegis-network
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 4G
+        reservations:
+          cpus: "0.5"
+          memory: 1G
+
+  # ============================================
+  # MLflow Tracking Server (Optional)
+  # ============================================
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.19.0
+    container_name: aegis-mlflow
+    restart: unless-stopped
+    ports:
+      - "${MLFLOW_PORT:-5000}:5000"
+    environment:
+      - MLFLOW_BACKEND_STORE_URI=sqlite:///mlflow/mlflow.db
+      - MLFLOW_DEFAULT_ARTIFACT_ROOT=/mlflow/artifacts
+    volumes:
+      - mlflow-data:/mlflow
+    command: >
+      mlflow server
+      --backend-store-uri sqlite:///mlflow/mlflow.db
+      --default-artifact-root /mlflow/artifacts
+      --host 0.0.0.0
+      --port 5000
+    networks:
+      - aegis-network
+    profiles:
+      - full
+
+  # ============================================
+  # Prometheus (Optional - for metrics)
+  # ============================================
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: aegis-prometheus
+    restart: unless-stopped
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    networks:
+      - aegis-network
+    profiles:
+      - monitoring
+
+  # ============================================
+  # Grafana (Optional - for dashboards)
+  # ============================================
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: aegis-grafana
+    restart: unless-stopped
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    networks:
+      - aegis-network
+    profiles:
+      - monitoring
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  aegis-network:
+    driver: bridge
+    name: aegis-network
+
+# ============================================
+# Volumes
+# ============================================
+volumes:
+  aegis-logs:
+    name: aegis-logs
+  mlflow-data:
+    name: aegis-mlflow-data
+  prometheus-data:
+    name: aegis-prometheus-data
+  grafana-data:
+    name: aegis-grafana-data

@@ -9,11 +9,11 @@ Testing discipline: Light but mandatory.
 import pytest
 from datetime import datetime
 
-from src.aegis_ai.agents.behavior.agent import BehaviorAgent
-from src.aegis_ai.agents.behavior.schema import BehavioralOutput
-from src.aegis_ai.data.schemas.login_event import LoginEvent
-from src.aegis_ai.data.schemas.session import Session, GeoLocation
-from src.aegis_ai.data.schemas.user import User
+from aegis_ai.agents.behavior.agent import BehaviorAgent
+from aegis_ai.agents.behavior.schema import BehavioralOutput
+from aegis_ai.data.schemas.login_event import LoginEvent
+from aegis_ai.data.schemas.session import Session, GeoLocation
+from aegis_ai.data.schemas.user import User
 
 
 @pytest.fixture

@@ -12,14 +12,14 @@ Output:
 
 import argparse
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any
 from dataclasses import dataclass
 
-from src.aegis_ai.data.schemas import User, Device, Session, LoginEvent
-from src.aegis_ai.data.generators.legit_login import LegitLoginGenerator
-from src.aegis_ai.data.generators.ato_login import ATOLoginGenerator, ATOScenarioType
-from src.aegis_ai.data.validators.schema_validator import validate_all
+from aegis_ai.data.schemas import User, Device, Session, LoginEvent
+from aegis_ai.data.generators.legit_login import LegitLoginGenerator
+from aegis_ai.data.generators.ato_login import ATOLoginGenerator, ATOScenarioType
+from aegis_ai.data.validators.schema_validator import validate_all
 
 
 @dataclass
@@ -75,7 +75,7 @@ class DatasetGenerator:
             DatasetStats with generation summary
         """
         self.reset()
-        base_time = base_time or datetime.utcnow() - timedelta(days=30)
+        base_time = base_time or datetime.now(timezone.utc) - timedelta(days=30)
         
         num_ato_users = int(num_users * ato_ratio)
         num_legit_users = num_users - num_ato_users

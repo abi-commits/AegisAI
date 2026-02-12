@@ -2,9 +2,7 @@
 
 ### Agentic Fraud & Trust Intelligence System
 
-AegisAI is an enterprise-grade, agentic AI system for Account Takeover (ATO) detection in digital banking and fintech environments. Unlike traditional fraud systems that optimize for detection accuracy, AegisAI treats **trust as a system-level property** rather than a model metric.
-
-The most important decision this system makes is knowing when **not** to decide.
+AegisAI is an agentic AI system for Account Takeover (ATO) detection in digital banking and fintech environments. Unlike traditional fraud systems that optimize for detection accuracy, AegisAI treats **trust as a system-level property** rather than a model metric.
 
 ---
 
@@ -45,12 +43,6 @@ The system is designed for **high-stakes decisions** where false positives harm 
 
 Traditional fraud systems are evaluated on detection accuracy. This is insufficient for production deployment:
 
-| Metric | Why It's Insufficient |
-|--------|----------------------|
-| **Accuracy** | Doesn't distinguish between false positives (harming users) and false negatives (missing fraud) |
-| **Precision** | High precision can hide high false negative rates |
-| **Recall** | High recall often comes with unacceptable false positive rates |
-| **AUC-ROC** | Aggregate metric that hides decision-boundary problems |
 
 ### What Actually Matters
 
@@ -65,14 +57,6 @@ AegisAI tracks metrics that reflect real-world impact:
 | **Policy Violation Count** | How often hard limits are breached | **0** |
 
 A system with 99% accuracy that blocks 10% of legitimate users is worse than one with 95% accuracy that escalates edge cases to humans.
-
-### The Core Problem
-
-Modern ML systems are trained to always make predictions. But in high-stakes domains:
-
-> **"When you are not sure, saying 'I don't know' is the right answer."**
-
-AegisAI is built around this principle. Uncertainty is not a bug—it's a feature.
 
 ---
 
@@ -115,24 +99,6 @@ AegisAI uses a **multi-agent architecture** where no single model has decision a
         └─────────────┘   └───────────────┘   └─────────────┘
 ```
 
-### Agent Responsibilities
-
-| Agent | Input | Output | Cannot |
-|-------|-------|--------|--------|
-| **Detection Agent** | Login event + session features | `risk_signal_score` (0-1) | Make decisions |
-| **Behavior Agent** | Historical behavior patterns | `behavioral_match_score` (0-1) | See other agents |
-| **Network Agent** | User-device-IP graph | `network_risk_score` + evidence | Issue verdicts |
-| **Confidence Agent** | All agent outputs | `decision_permission` | Label fraud |
-| **Explanation Agent** | Approved decision + evidence | Action + explanation + audit | Override policies |
-
-### Agent Isolation Principle
-
-Agents cannot see each other's internal reasoning. They provide scores and evidence, not conclusions. This prevents:
-- Single-model bias dominating decisions
-- Confirmation bias between models
-- Cascading failures from correlated errors
-
-The Confidence Agent aggregates signals and determines whether disagreement is too high for autonomous decision-making.
 
 ---
 
@@ -255,43 +221,17 @@ Audit logs use hash-chain integrity. Any tampering breaks the chain.
 
 ---
 
-## Demo Walkthrough
+## Deployment
 
-AegisAI ships with a demo that shows exactly three scenarios:
+For production deployment to AWS ECS, see [deploy/DEPLOYMENT.md](deploy/DEPLOYMENT.md).
 
-### Running the Demo
+---
 
-```bash
-python demo.py
-```
+## Known Limitations
 
-### Scenario 1: Legitimate Login → ALLOW
-
-A returning customer logs in from their known device and home location.
-
-**Input:**
-- User: 1-year-old account, San Francisco resident
-- Device: Known MacBook, used for 180 days
-- Location: San Francisco, normal hours
-- Behavior: Matches historical patterns
-
-**Output:**
-```
-Decision: ALLOW
-Decided by: AI
-Confidence: 87%
-```
-
-The legitimate user proceeds without friction.
-
-### Scenario 2: Suspicious Login → CHALLENGE
-
-A login attempt from a new device in a foreign country at 3 AM.
-
-**Input:**
-- User: Same 1-year-old account
-- Device: Never seen before, Windows machine
-- Location: Moscow, Russia (VPN detected)
+- Confidence calibration is heuristic-based; re-calibrate on real data
+- Agents run sequentially; parallel execution in future versions
+- No A/B testing framework yet; use separate evaluation suite
 - Time: 3:15 AM local time
 - Failed attempts: 2 before success
 
@@ -424,45 +364,6 @@ python -m src.aegis_ai.evaluation.runner
 ```bash
 pytest tests/ -v
 ```
-
----
-
-## Project Structure
-
-```
-AegisAI/
-├── src/aegis_ai/           # Main application package
-│   ├── agents/             # 5 specialized agents
-│   ├── orchestration/      # Decision flow & routing
-│   ├── governance/         # Audit & policy enforcement
-│   ├── evaluation/         # Metrics & evaluation
-│   ├── data/               # Schemas & generators
-│   └── models/             # ML models & calibration
-├── tests/                  # Test suite
-├── config/                 # Policy configuration
-├── docs/                   # Documentation
-├── demo.py                 # Interactive demo
-└── README.md               # This file
-```
-
----
-
-## Definition of "Shipped"
-
-AegisAI is complete when:
-
-- [x] One end-to-end ATO demo runs
-- [x] AI escalates uncertainty correctly
-- [x] Human override is logged
-- [x] Policies constrain actions
-- [x] Audit logs are reproducible
-- [x] README explains everything clearly
-
----
-
-## License
-
-This project is for demonstration and educational purposes.
 
 ---
 

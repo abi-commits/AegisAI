@@ -1,0 +1,56 @@
+{
+  "family": "aegis-ai",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "containerDefinitions": [
+    {
+      "name": "aegis-api",
+      "image": "253490748872.dkr.ecr.ap-south-1.amazonaws.com/ageis-ai:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "AEGIS_ENVIRONMENT",
+          "value": "production"
+        },
+        {
+          "name": "AEGIS_LOG_LEVEL",
+          "value": "INFO"
+        },
+        {
+          "name": "AEGIS_API_HOST",
+          "value": "0.0.0.0"
+        },
+        {
+          "name": "AEGIS_API_PORT",
+          "value": "8000"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/aegis-ai",
+          "awslogs-region": "ap-south-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:8000/ready || exit 1"],
+        "interval": 30,
+        "timeout": 10,
+        "retries": 3,
+        "startPeriod": 5
+      }
+    }
+  ],
+  "executionRoleArn": "arn:aws:iam::253490748872:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::253490748872:role/ecsTaskRole"
+}

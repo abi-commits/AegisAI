@@ -14,12 +14,12 @@ from typing import List, Tuple
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from src.aegis_ai.evaluation.metrics import EvaluationMetrics
-from src.aegis_ai.data.generators.legit_login import LegitLoginGenerator
-from src.aegis_ai.data.generators.ato_login import ATOLoginGenerator
-from src.aegis_ai.data.schemas import User, Device, Session, LoginEvent
-from src.aegis_ai.orchestration.decision_context import InputContext
-from src.aegis_ai.orchestration.decision_flow import DecisionFlow
+from aegis_ai.evaluation.metrics import EvaluationMetrics
+from aegis_ai.data.generators.legit_login import LegitLoginGenerator
+from aegis_ai.data.generators.ato_login import ATOLoginGenerator
+from aegis_ai.data.schemas import User, Device, Session, LoginEvent
+from aegis_ai.orchestration.decision_context import InputContext
+from aegis_ai.orchestration.decision_flow import DecisionFlow
 
 
 class EvaluationRunner:

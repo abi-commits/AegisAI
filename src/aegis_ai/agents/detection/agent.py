@@ -1,61 +1,27 @@
-"""Detection Agent - identifies anomalous login behavior.
-
-Paranoid by design: flags risk signals without making decisions.
-Supports both ML-based scoring and heuristic fallback.
-
-This agent thinks. It does not act.
-
-Phase 4: ML model replaces heuristic score calculation.
-- Same inputs (LoginEvent, Session, Device)
-- Same outputs (risk_signal_score, risk_factors)
-- Same decision boundaries (clamped to [0, 1])
-- SHAP-based factor extraction for explainability
-"""
+"""Detection Agent - identifies anomalous login behavior."""
 
 from pathlib import Path
 from typing import Optional, Any
 
-from src.aegis_ai.data.schemas.login_event import LoginEvent
-from src.aegis_ai.data.schemas.session import Session
-from src.aegis_ai.data.schemas.device import Device
-from src.aegis_ai.agents.detection.schema import DetectionOutput
+from aegis_ai.data.schemas.login_event import LoginEvent
+from aegis_ai.data.schemas.session import Session
+from aegis_ai.data.schemas.device import Device
+from aegis_ai.agents.detection.schema import DetectionOutput
+from aegis_ai.common.constants import ModelConstants
 
 
 class DetectionAgent:
-    """Detection Agent - Paranoid by Design.
+    """Detection Agent - Paranoid by Design."""
     
-    Responsibilities:
-    - Identify risk signals from login events
-    - Flag anomalous patterns
-    - Return structured risk assessment
-    
-    Constraints:
-    - No blocking decisions
-    - No confidence claims
-    - No side effects
-    - No logging decisions
-    - No raising actions
-    
-    ML Integration (Phase 4):
-    - Model only replaces the score, not the agent logic
-    - Agent still clamps output and emits factors
-    - Falls back to heuristic if model unavailable
-    """
-    
-    # Risk weights for heuristic fallback
     RISK_WEIGHTS = {
-        "new_device": 0.25,
-        "new_ip": 0.15,
-        "new_location": 0.30,
-        "failed_attempts": 0.10,  # per attempt, capped
-        "vpn_detected": 0.10,
-        "tor_detected": 0.35,
-        "long_time_since_login": 0.10,
+        "new_device": 0.25, "new_ip": 0.15, "new_location": 0.30,
+        "failed_attempts": 0.10, "vpn_detected": 0.10,
+        "tor_detected": 0.35, "long_time_since_login": 0.10
     }
     
     # Thresholds
     FAILED_ATTEMPTS_CAP = 3  # Max contribution from failed attempts
-    LONG_ABSENCE_HOURS = 720  # 30 days
+    LONG_ABSENCE_HOURS = ModelConstants.BEHAVIOR_LONG_ABSENCE_HOURS
     
     def __init__(
         self,
@@ -95,7 +61,7 @@ class DetectionAgent:
             return False
         
         try:
-            from src.aegis_ai.models.risk import (
+            from aegis_ai.models.risk import (
                 GBDTRiskModel,
                 FeatureExtractor,
                 SHAPExplainer,

@@ -3,12 +3,12 @@
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from src.aegis_ai.governance.schemas import (
+from aegis_ai.governance.schemas import (
     HumanOverride,
     OverrideType,
     PolicyRules,
 )
-from src.aegis_ai.governance.audit.logger import AuditLogger
+from aegis_ai.governance.audit.logger import AuditLogger
 
 
 class HumanOverrideError(Exception):
@@ -235,7 +235,7 @@ class HumanOverrideHandler:
         Returns:
             List of HumanOverride records
         """
-        from src.aegis_ai.governance.schemas import AuditEventType
+        from aegis_ai.governance.schemas import AuditEventType
         
         overrides = []
         for entry in self.audit_logger.get_entries(event_type=AuditEventType.HUMAN_OVERRIDE):

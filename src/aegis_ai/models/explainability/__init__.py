@@ -1,13 +1,13 @@
 """Explainability module - feature attribution without SHAP."""
 
-from src.aegis_ai.models.explainability.tree_explainer import (
+from aegis_ai.models.explainability.tree_explainer import (
     TreeExplainer,
     XGBoostExplainer,
     LightGBMExplainer,
     FeatureImportance,
     DecisionPath,
 )
-from src.aegis_ai.models.explainability.templates import (
+from aegis_ai.models.explainability.templates import (
     RiskFactor,
     ExplanationTemplate,
     ExplanationBuilder,

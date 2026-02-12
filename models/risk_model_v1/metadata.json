@@ -1,0 +1,28 @@
+{
+  "version": "1.0.0",
+  "trained_at": "2026-02-08T08:41:36.858643+00:00",
+  "model_type": "xgboost",
+  "n_features": 14,
+  "feature_names": [
+    "is_new_device",
+    "device_not_known",
+    "is_new_ip",
+    "is_new_location",
+    "is_vpn",
+    "is_tor",
+    "failed_attempts_before",
+    "failed_attempts_capped",
+    "time_since_last_login_hours",
+    "is_long_absence",
+    "auth_method_password",
+    "auth_method_mfa",
+    "auth_method_sso",
+    "auth_method_biometric"
+  ],
+  "test_metrics": {
+    "auc_roc": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0
+  }
+}

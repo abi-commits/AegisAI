@@ -1,82 +1,34 @@
-"""Network & Evidence Agent - surfaces relational risk via shared infrastructure.
-
-Suspicion by association: points to evidence without concluding.
-Uses shared IP counts, device reuse, and known risky clusters.
-
-Phase 4: GNN-based network risk scoring with GraphSAGE embeddings.
-Falls back to heuristic if model unavailable.
-
-This agent never concludes, it only points.
-This agent thinks. It does not act.
-"""
+"""Network & Evidence Agent - surfaces relational risk via shared infrastructure."""
 
 from typing import Optional, List, Dict, Tuple
-
 import numpy as np
 
-from src.aegis_ai.data.schemas.session import Session
-from src.aegis_ai.data.schemas.device import Device
-from src.aegis_ai.agents.network.schema import NetworkOutput
-from src.aegis_ai.models.graph.builder import GraphBuilder
-from src.aegis_ai.models.graph.schema import NodeType
+from aegis_ai.data.schemas.session import Session
+from aegis_ai.data.schemas.device import Device
+from aegis_ai.agents.network.schema import NetworkOutput
+from aegis_ai.models.graph.builder import GraphBuilder
+from aegis_ai.models.graph.schema import NodeType
 
 
 class NetworkAgent:
-    """Network & Evidence Agent - Suspicion by Association.
+    """Network & Evidence Agent - Suspicion by Association."""
     
-    Owns the user-device-IP graph and computes network risk signals.
-    
-    Responsibilities:
-    - Identify shared infrastructure patterns
-    - Surface evidence of network-based risk
-    - Flag known risky clusters
-    - Use GNN embeddings for graph-based risk (Phase 4)
-    
-    Constraints:
-    - Evidence only, no verdicts
-    - No fraud conclusions
-    - No side effects
-    - No logging decisions
-    - No raising actions
-    """
-    
-    # Risk weights for graph signals
     RISK_WEIGHTS = {
-        "shared_ip_per_account": 0.08,
-        "shared_device_per_account": 0.12,
-        "vpn_ip": 0.10,
-        "tor_ip": 0.25,
-        "high_degree_device": 0.15,
-    }
-    
-    # Thresholds
+        "shared_ip_per_account": 0.08, "shared_device_per_account": 0.12,
+        "vpn_ip": 0.10, "tor_ip": 0.25, "high_degree_device": 0.15}
     MAX_SHARED_ACCOUNTS = 5
     HIGH_DEGREE_THRESHOLD = 10
     
     def __init__(self, use_gnn_model: bool = True, fallback_to_heuristic: bool = True):
-        """Initialize Network Agent.
-        
-        Args:
-            use_gnn_model: Whether to use GNN for embeddings
-            fallback_to_heuristic: Fall back if GNN fails
-        """
         self._graph_builder = GraphBuilder()
         self._use_gnn_model = use_gnn_model
         self._fallback_to_heuristic = fallback_to_heuristic
-        
-        # Lazy-loaded GNN model
         self._gnn_model: Optional[object] = None
         self._model_initialized = False
-        
-        # Cache for user risk labels (for risk propagation)
         self._user_risk_labels: Dict[str, float] = {}
     
     def _init_gnn_model(self) -> bool:
-        """Initialize GNN model lazily.
-        
-        Returns:
-            True if model initialized successfully
-        """
+        """Initialize GNN model lazily."""
         if self._model_initialized:
             return self._gnn_model is not None
         
@@ -86,7 +38,7 @@ class NetworkAgent:
             return False
         
         try:
-            from src.aegis_ai.models.graph.sage_model import GraphSAGEModel
+            from aegis_ai.models.graph.sage_model import GraphSAGEModel
             self._gnn_model = GraphSAGEModel()
             return True
         except Exception:
