@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy dependency files
-COPY pyproject.toml MANIFEST.in ./
+COPY pyproject.toml ./
 COPY src/ ./src/
 
 # Create virtual environment and install dependencies
@@ -72,7 +72,6 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY --chown=aegis:aegis src/ ./src/
 COPY --chown=aegis:aegis config/ ./config/
 COPY --chown=aegis:aegis docker/entrypoint.sh /app/entrypoint.sh
-COPY --chown=aegis:aegis main.py ./
 
 # Ensure entrypoint is executable
 RUN chmod +x /app/entrypoint.sh
