@@ -16,9 +16,6 @@ logger = logging.getLogger(__name__)
 class DecisionFlow:
     """Orchestrates the complete decision lifecycle."""
     
-    HIGH_RISK_THRESHOLD = 0.70
-    MEDIUM_RISK_THRESHOLD = 0.40
-    
     def __init__(self, router: Optional[AgentRouter] = None):
         self.router = router or AgentRouter()
     
