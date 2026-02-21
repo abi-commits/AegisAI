@@ -125,3 +125,4 @@ data/
 models/**/model/
 *.sqlite
 *.db
+.terraform/
