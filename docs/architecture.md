@@ -1,115 +1,72 @@
-# AegisAI — System Architecture
+# System Architecture — AegisAI
 
-This document describes the internal architecture and design rationale of AegisAI.
-
----
-
-## Architectural Goal
-
-To design a fraud detection system that:
-- Separates prediction from decision-making
-- Handles uncertainty explicitly
-- Preserves human authority
-- Supports audit, compliance, and post-mortem analysis
+AegisAI employs a **multi-agent, parallel-execution architecture** designed to handle the complexity and high stakes of fraud detection. This document details the structural design and interaction patterns of the system.
 
 ---
 
-## High-Level Components
+## 1. Architectural Philosophy
 
-1. Event Ingestion Layer
-2. Agent Reasoning Layer
-3. Decision Orchestration Layer
-4. Governance & Audit Layer
-5. Human Review Interface (simulated)
+The architecture is built on four core principles:
+- **Separation of Concerns**: Risk prediction is decoupled from decision-making.
+- **Explicit Uncertainty**: AI must quantify its confidence before acting.
+- **Authority Gating**: Decisions are governed by deterministic policies and human oversight.
+- **Immutability**: Every state change in the decision lifecycle is recorded permanently.
 
 ---
 
-## Agent Reasoning Layer
+## 2. Decision Lifecycle
+
+Every login event processed by AegisAI follows a strictly governed lifecycle:
+
+1.  **Validation**: Incoming `LoginEvent` is validated against Pydantic schemas.
+2.  **Parallel Analysis**: The `AgentRouter` executes the Detection, Behavior, and Network agents in parallel.
+3.  **Synthesis**: Results are aggregated into an `AgentOutputs` collection.
+4.  **Confidence Gate**: The `ConfidenceAgent` evaluates the outputs to determine if AI is allowed to decide.
+5.  **Action Selection**: If allowed, the `ExplanationAgent` selects an action and generates a reasoning string.
+6.  **Policy Enforcement**: The `PolicyEngine` validates the proposed action against hard-coded safety rules.
+7.  **Audit Commitment**: The `UnifiedAuditTrail` writes the final decision to S3 and DynamoDB.
+
+---
+
+## 3. Agent Reasoning Layer
 
 ### Detection Agent
-- Purpose: Identify anomalous login behavior
-- Output: Risk signal score + factors
-- Constraint: Cannot make decisions
+- **Purpose**: Identify tabular anomalies in login metadata.
+- **Core Model**: XGBoost / LightGBM.
+- **Constraint**: Cannot access relational data or previous user history in this scope.
 
-### Behavioral Consistency Agent
-- Purpose: Compare current behavior with historical user patterns
-- Output: Behavioral match score
-- Constraint: No network context
+### Behavioral Agent
+- **Purpose**: Compare current session dynamics with historical user baselines.
+- **Core Model**: Isolation Forest / LSTM.
+- **Output**: A behavioral match score indicating consistency.
 
-### Network & Evidence Agent
-- Purpose: Surface relational risk via shared infrastructure
-- Output: Network risk score + evidence links
-- Constraint: Evidence only, no verdicts
+### Network Agent
+- **Purpose**: Surface relational risk via shared devices, IPs, and entities.
+- **Core Model**: Graph Neural Network (GNN).
+- **Evidence**: Shared infrastructure links and known-bad clusters.
 
-### Confidence & Calibration Agent
-- Purpose: Determine whether AI is allowed to decide
-- Output: Confidence score + decision permission
-- Constraint: Cannot generate actions or explanations
+### Confidence Agent (The Gatekeeper)
+- **Purpose**: Determine if the system is "certain" enough to make an autonomous decision.
+- **Logic**: Evaluates agent agreement and individual model confidence scores.
+- **Decision Permission**: `AI_ALLOWED` or `HUMAN_REQUIRED`.
 
-### Explanation & Action Agent
-- Purpose: Select action and generate explanation
-- Output: Action + human-readable explanation
-- Constraint: Must obey confidence and policy rules
-
----
-
-## Orchestration Flow
-
-- Agents execute in parallel
-- No agent sees another agent’s internal reasoning
-- Outputs are aggregated deterministically
-- Decision authority is gated by confidence and policy
-
-This design prevents cascading bias and overconfidence.
+### Explanation Agent
+- **Purpose**: Bridge the gap between raw scores and human-readable actions.
+- **Function**: Generates the final action (`ALLOW`, `CHALLENGE`, `BLOCK`) and the supporting rationale.
 
 ---
 
-## Policy Engine
+## 4. Governance & Policy Engine
 
-Policies are deterministic, versioned rules that override model outputs when necessary.
-
-Examples:
-- AI cannot permanently block accounts
-- Low confidence requires human escalation
-- High disagreement triggers review
-
-Policies are externalized and auditable.
+The `PolicyEngine` acts as a final safety check. It enforces:
+- **Action Limits**: Preventing automated mass-blocking.
+- **Escalation Rules**: Forcing human review on high-value or high-risk transactions regardless of AI confidence.
+- **Role Restrictions**: Ensuring only human reviewers can perform permanent account terminations.
 
 ---
 
-## Audit & Lineage
+## 5. Audit & Data Flow
 
-Every decision records:
-- Input event metadata
-- Agent outputs
-- Confidence scores
-- Final action
-- Human override (if any)
-- Model + policy versions
+Data flows through the system in a **unidirectional, immutable path**. The `DecisionContext` is a frozen dataclass, ensuring that once a decision is in progress, its state cannot be modified, only appended to the audit trail.
 
-No data is overwritten. History is immutable.
-
----
-
-## Failure-Aware Design
-
-The system explicitly anticipates:
-- False positives from travel or device changes
-- False negatives from low-and-slow attacks
-- Systemic risks from shared infrastructure
-- Bias introduced by human overrides
-
-Failures are logged, not hidden.
-
----
-
-## Design Philosophy
-
-AegisAI is intentionally conservative.
-
-The system prioritizes:
-- Trust over automation
-- Accountability over accuracy
-- Governance over optimization
-
-This architecture is designed to survive audits, not demos.
+For details on the storage architecture, see [docs/DATA_AUDIT_LAYER.md](DATA_AUDIT_LAYER.md).

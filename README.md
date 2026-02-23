@@ -1,331 +1,162 @@
-# AegisAI
-
-### Agentic Fraud & Trust Intelligence System
+# AegisAI: Agentic Fraud & Trust Intelligence System
 
 AegisAI is an agentic AI system for Account Takeover (ATO) detection in digital banking and fintech environments. Unlike traditional fraud systems that optimize for detection accuracy, AegisAI treats **trust as a system-level property** rather than a model metric.
 
 ---
 
-## Table of Contents
+## 1. Executive Summary
 
-1. [What AegisAI Is](#what-aegisai-is)
-2. [Why Accuracy Is Not Enough](#why-accuracy-is-not-enough)
-3. [Architecture & Agents](#architecture--agents)
-4. [Decision Lifecycle](#decision-lifecycle)
-5. [Governance & Safety](#governance--safety)
-6. [Demo Walkthrough](#demo-walkthrough)
-7. [Known Limitations](#known-limitations)
-8. [Future Extensions](#future-extensions)
+AegisAI is a **governed decision-making system** designed to protect high-stakes digital environments from account takeover. It uses a **multi-agent architecture** to separate risk prediction from decision authority, ensuring that AI only makes decisions when confidence is high and policy allows. The system features a **human-in-the-loop escalation** mechanism for ambiguous cases and an **immutable, hash-chained audit trail** for regulatory compliance and transparency.
 
----
-
-## What AegisAI Is
-
-AegisAI is a **governed decision-making system** for detecting account takeover fraud. It consists of:
-
-- **5 specialized agents** that analyze login events from different perspectives
-- **A confidence gating mechanism** that determines when AI should decide vs. escalate
-- **An immutable audit system** that logs every decision with full traceability
-- **Policy constraints** that override model outputs when necessary
-- **Human-in-the-loop integration** for edge cases and uncertainty
-
-AegisAI processes login events and produces one of four outcomes:
-- `ALLOW` — Legitimate user, proceed silently
-- `CHALLENGE` — Suspicious signals, require step-up authentication
-- `BLOCK` — High-confidence fraud, deny access
-- `ESCALATE` — Uncertain, defer to human reviewer
-
-The system is designed for **high-stakes decisions** where false positives harm legitimate users and false negatives enable fraud.
+**Key Value Propositions:**
+- **Controlled Autonomy**: AI only decides when it's certain; humans handle the rest.
+- **Traceable Decisions**: Every action is logged with its full reasoning and lineage.
+- **Policy-First Governance**: Hard constraints override model outputs to ensure safety.
+- **Enterprise-Ready**: Designed with modularity, scalability, and auditability at its core.
 
 ---
 
-## Why Accuracy Is Not Enough
+## 2. Problem Framing
 
-Traditional fraud systems are evaluated on detection accuracy. This is insufficient for production deployment:
+Traditional fraud detection systems focus on **accuracy metrics** (Precision/Recall), which often fails in high-stakes production environments:
 
+- **The False Positive Paradox**: A 99% accurate model that blocks 1% of legitimate users can destroy customer trust and increase support costs.
+- **The Transparency Gap**: Black-box models cannot explain *why* a user was blocked, making regulatory compliance and manual review difficult.
+- **The Authority Risk**: Purely automated systems can be "tricked" by novel attacks if they don't have a mechanism for restraint.
 
-### What Actually Matters
-
-AegisAI tracks metrics that reflect real-world impact:
-
-| Metric | What It Measures | Target |
-|--------|------------------|--------|
-| **False Positive Rate** | How often legitimate users are harmed | < 5% |
-| **Escalation Rate** | How often AI exercises restraint | 5-30% |
-| **Human Override Rate** | How often humans change AI decisions | < 20% |
-| **Confidence Calibration Error** | How honest AI is about uncertainty | < 0.10 |
-| **Policy Violation Count** | How often hard limits are breached | **0** |
-
-A system with 99% accuracy that blocks 10% of legitimate users is worse than one with 95% accuracy that escalates edge cases to humans.
+AegisAI solves this by prioritizing **Trust and Reliability** over raw accuracy, explicitly modeling uncertainty and escalating to humans when necessary.
 
 ---
 
-## Architecture & Agents
+## 3. System Architecture
 
-AegisAI uses a **multi-agent architecture** where no single model has decision authority.
+AegisAI follows a **multi-agent, parallel-execution architecture** where no single model has absolute authority.
 
-### Agent Overview
+### High-Level Component Map
 
+```mermaid
+graph TD
+    subgraph Input
+        A[Login Event] --> B[Input Validation]
+    end
+
+    subgraph "Reasoning Layer (Agents)"
+        B --> C[Detection Agent]
+        B --> D[Behavior Agent]
+        B --> E[Network Agent]
+    end
+
+    subgraph "Decision Orchestration"
+        C & D & E --> F[Confidence Agent]
+        F -- AI_ALLOWED --> G[Explanation Agent]
+        F -- HUMAN_REQUIRED --> H[Escalation Queue]
+    end
+
+    subgraph "Governance & Action"
+        G --> I[Policy Engine]
+        I --> J[Final Action]
+        H --> K[Human Override]
+        K --> J
+    end
+
+    subgraph "Audit & Monitoring"
+        J --> L[Unified Audit Trail]
+        L --> M[S3 Immutable Logs]
+        L --> N[DynamoDB Metadata]
+    end
 ```
-                         ┌─────────────────┐
-                         │  Login Event    │
-                         └────────┬────────┘
-                                  │
-                    ┌─────────────┼─────────────┐
-                    │             │             │
-              ┌─────▼─────┐ ┌─────▼─────┐ ┌─────▼─────┐
-              │ Detection │ │ Behavior  │ │ Network   │
-              │   Agent   │ │   Agent   │ │   Agent   │
-              └─────┬─────┘ └─────┬─────┘ └─────┬─────┘
-                    │             │             │
-                    └─────────────┼─────────────┘
-                                  │
-                         ┌────────▼────────┐
-                         │   Confidence    │
-                         │     Agent       │
-                         │  (GATEKEEPER)   │
-                         └────────┬────────┘
-                                  │
-                         ┌────────▼────────┐
-                         │   Explanation   │
-                         │     Agent       │
-                         └────────┬────────┘
-                                  │
-               ┌──────────────────┼──────────────────┐
-               │                  │                  │
-        ┌──────▼──────┐   ┌───────▼───────┐   ┌──────▼──────┐
-        │    ALLOW    │   │   CHALLENGE   │   │  ESCALATE   │
-        │   (silent)  │   │  (step-up)    │   │  (human)    │
-        └─────────────┘   └───────────────┘   └─────────────┘
-```
 
+### Agent Roles & Contracts
+
+| Agent | Purpose | Primary Signal | Constraint |
+|-------|---------|----------------|------------|
+| **Detection** | Anomaly Detection | XGBoost risk scores | Cannot make decisions |
+| **Behavior** | Pattern Consistency | Isolation Forest patterns | No network context |
+| **Network** | Relational Risk | Graph Neural Network (GNN) | Evidence only, no verdicts |
+| **Confidence** | Gatekeeper | Uncertainty/Disagreement | Cannot generate actions |
+| **Explanation**| Action & Reasoning | LLM/Template-based | Must obey policy rules |
 
 ---
 
-## Decision Lifecycle
+## 4. Design Decisions & Tradeoffs
 
-Every login event follows this immutable lifecycle:
-
-### Phase 1: Input Validation
-```
-LoginEvent + Session + Device + User → InputContext (frozen)
-```
-All input is validated through Pydantic schemas. Invalid input is rejected before processing.
-
-### Phase 2: Parallel Agent Analysis
-```
-InputContext → [Detection, Behavior, Network] → AgentOutputs
-```
-Three analysis agents run in parallel. Each produces a risk score and supporting evidence.
-
-### Phase 3: Confidence Gating (THE SACRED CHECK)
-```
-AgentOutputs → ConfidenceAgent → decision_permission
-```
-The Confidence Agent determines whether AI should decide:
-- `AI_ALLOWED` — Agents agree, confidence is high, proceed to action
-- `HUMAN_REQUIRED` — Disagreement too high, escalate to human
-
-**This is the most important component.** The confidence gate enforces AI restraint.
-
-### Phase 4: Action or Escalation
-```
-If AI_ALLOWED:    AgentOutputs → ExplanationAgent → FinalDecision
-If HUMAN_REQUIRED: AgentOutputs → EscalationCase → Human Queue
-```
-
-### Phase 5: Audit Logging
-```
-FinalDecision | EscalationCase → AuditLogger → JSONL (immutable)
-```
-Every decision is logged with full traceability. Logs are append-only with hash-chain integrity.
-
-### Context Immutability
-
-The `DecisionContext` is a frozen dataclass. Once created, nothing can modify it:
-```python
-@dataclass(frozen=True)
-class DecisionContext:
-    context_id: str
-    created_at: datetime
-    input_context: InputContext
-    agent_outputs: Optional[AgentOutputs]
-    final_decision: Optional[FinalDecision]
-    escalation_case: Optional[EscalationCase]
-```
-
-This ensures complete auditability and prevents post-hoc tampering.
+- **Separation of Prediction and Decision**: Agents produce *signals*, but only the orchestrator (gated by confidence) produces *decisions*. This prevents single-model bias from cascading.
+- **Immutability over Performance**: We use a frozen `DecisionContext` and hash-chained audit logs. This adds a slight latency overhead but guarantees that no decision can be tampered with post-hoc.
+- **Conservative Action Defaults**: When in doubt, the system defaults to `CHALLENGE` or `ESCALATE` rather than `ALLOW` or `BLOCK`, prioritizing security and user trust.
+- **Vanilla CSS & Standard Frameworks**: For the UI (if applicable) and API, we use standard, flexible tools like FastAPI and Vanilla CSS to avoid vendor lock-in and ensure long-term maintainability.
 
 ---
 
-## Governance & Safety
+## 5. Failure Modes
 
-AegisAI enforces governance at multiple levels.
+AegisAI is designed to fail gracefully. Known failure modes include:
 
-### Policy Constraints
-
-Hard limits that cannot be overridden by models:
-
-```yaml
-confidence:
-  min_to_allow: 0.80        # AI needs 80%+ confidence to decide
-  min_to_escalate: 0.50     # Below 50% always escalates
-
-actions:
-  permanent_block_allowed: false  # AI cannot permanently block
-  human_only_actions:
-    - "BLOCK_PERMANENT"
-    - "ACCOUNT_TERMINATION"
-    - "LEGAL_HOLD"
-
-escalation:
-  disagreement_threshold: 0.30    # >30% disagreement → human
-  consecutive_high_risk_limit: 3  # 3+ high-risk → human
-```
-
-### Human Override System
-
-When AI escalates, humans can:
-- `APPROVE` — Allow the login
-- `REJECT` — Block the login
-- `MODIFY` — Take a different action
-- `DEFER` — Escalate further
-
-All overrides are logged immutably with:
-- Reviewer ID and role
-- Reason for override
-- Original AI recommendation
-- Policy version at time of decision
-
-### Audit Trail
-
-Every decision produces an audit entry:
-
-```json
-{
-  "entry_id": "aud_abc123def456",
-  "timestamp": "2026-01-27T10:30:00Z",
-  "event_type": "decision",
-  "decision_id": "dec_xyz789",
-  "action": "ESCALATE",
-  "decided_by": "HUMAN_REQUIRED",
-  "confidence_score": 0.62,
-  "policy_version": "1.0.0",
-  "agent_outputs": { ... },
-  "previous_hash": "sha256:...",
-  "entry_hash": "sha256:..."
-}
-```
-
-Audit logs use hash-chain integrity. Any tampering breaks the chain.
+- **The Travel Trap**: A legitimate user logging in from a new country might trigger high risk. *Mitigation: Confidence agent detects novelty and escalates to human review.*
+- **Low-and-Slow Attacks**: Sophisticated attackers might mimic behavior perfectly. *Mitigation: Network Agent identifies shared infrastructure and relational anomalies.*
+- **Systemic Bias**: Human reviewers might consistently override certain types of correct AI decisions. *Mitigation: Human Override Rate monitoring and periodic policy/model retraining.*
+- **Infrastructure Latency**: High-traffic bursts might slow down parallel execution. *Mitigation: Timeouts and fallback "Safe Mode" actions.*
 
 ---
 
-## Deployment
+## 6. Observability & Evaluation
 
-For production deployment to AWS ECS, see [deploy/DEPLOYMENT.md](deploy/DEPLOYMENT.md).
+We track metrics that reflect real-world trust, not just model performance:
 
----
+| Metric | Goal | Rationale |
+|--------|------|-----------|
+| **False Positive Rate (FPR)** | < 5% | Minimizes harm to legitimate users. |
+| **Escalation Rate** | 5-30% | Measures how often the AI exercises healthy restraint. |
+| **Human Override Rate** | < 20% | Indicates AI-Human alignment and model drift. |
+| **Calibration Error** | < 0.10 | Ensures the AI is "honest" about its uncertainty. |
+| **Policy Violation Count** | **0** | Proves the governance layer is enforcing hard limits. |
 
-## Known Limitations
-
-- Confidence calibration is heuristic-based; re-calibrate on real data
-- Agents run sequentially; parallel execution in future versions
-- No A/B testing framework yet; use separate evaluation suite
-- Time: 3:15 AM local time
-- Failed attempts: 2 before success
-
-**Output:**
-```
-Decision: CHALLENGE
-Decided by: AI
-Confidence: 78%
-```
-
-The user is prompted for step-up authentication (SMS code, etc.).
-
-### Scenario 3: Ambiguous Login → ESCALATE (THE STAR)
-
-A login from a new mobile device in London. Could be legitimate travel or ATO.
-
-**Input:**
-- User: Same account
-- Device: New iPhone (could be new phone)
-- Location: London, UK (no VPN)
-- Time: 2:30 PM local (normal hours)
-- Behavior: Partially matches (mobile vs. desktop)
-
-**Output:**
-```
-Decision: ESCALATE
-Decided by: HUMAN_REQUIRED
-Confidence: 62%
-Reason: HIGH_DISAGREEMENT
-```
-
-The AI refuses to decide. A human fraud analyst reviews the case, checks travel history, and approves the login.
-
-> **"The most important decision this system makes is knowing when not to decide."**
-
-### Running the Evaluation Suite
-
-```bash
-# Standard evaluation: 100 legit + 20 ATO
-python -m src.aegis_ai.evaluation.runner
-
-# Quick evaluation: 20 legit + 5 ATO
-python -m src.aegis_ai.evaluation.runner --quick
-
-# Custom configuration
-python -m src.aegis_ai.evaluation.runner --legit 200 --ato 50 --seed 123
-```
+**Monitoring Tools**:
+- **Prometheus/Grafana**: For real-time metrics (latency, throughput, escalation spikes).
+- **MLflow**: For model versioning and artifact tracking.
+- **S3 Audit Store**: For historical analysis and compliance reporting.
 
 ---
 
-## Known Limitations
+## 7. Scaling Strategy
 
-AegisAI is a demonstration system with deliberate constraints:
-
-### Data Limitations
-- **Synthetic data only** — No real customer data is used
-- **Simplified behavioral signals** — Real systems have richer biometrics
-- **Limited geographic coverage** — 10 countries in the generator
-
-### Model Limitations
-- **No online learning** — Models are static, not continuously updated
-- **Lightweight graph modeling** — Production would use deeper GNNs
-- **No ensemble calibration** — Single calibration method (isotonic)
-
-### Operational Limitations
-- **No streaming ingestion** — Batch processing only
-- **No real-time monitoring** — Evaluation is post-hoc
-- **No A/B testing framework** — Static policy rules
-
-These limitations are **intentional** to keep the system:
-- Auditable (no hidden state)
-- Reproducible (deterministic seeds)
-- Understandable (no black-box ensembles)
+- **Audit Layer**: Uses **S3** for immutable storage (highly scalable) and **DynamoDB** for fast metadata lookups (low-latency, auto-scaling).
+- **Execution**: The `AgentRouter` supports parallel execution of agents via Python `asyncio`, allowing us to scale the number of agents without linear latency increases.
+- **Inference**: Deployment on **AWS ECS (Fargate)** ensures the compute layer scales horizontally based on request volume.
+- **Future**: Integration with **Kafka/Kinesis** for streaming event ingestion and real-time graph updates.
 
 ---
 
-## Future Extensions
+## 8. Governance & Safety
 
-AegisAI could be extended with:
+**Hard Policy Constraints** (Managed in `config/policy_rules.yaml`):
+- AI cannot permanently block accounts.
+- AI cannot terminate user sessions without 90%+ confidence.
+- Any decision with >30% agent disagreement *must* escalate.
 
-### Near-Term
-- **Streaming ingestion** — Kafka/Kinesis integration
-- **Real-time monitoring** — Prometheus metrics, Grafana dashboards
-- **API service** — FastAPI endpoint for inference
+**Tamper Detection**:
+- Audit logs use **hash-chain integrity**. Any change to a past record breaks the chain and alerts the security team.
+- **Object Lock (WORM)** is enabled on S3 audit buckets to prevent deletion.
 
-### Medium-Term
-- **Richer behavioral biometrics** — Typing patterns, mouse dynamics
-- **Advanced graph reasoning** — Temporal knowledge graphs
-- **Online policy learning** — Contextual bandits for threshold tuning
+---
 
-### Long-Term
-- **Federated learning** — Cross-institution fraud patterns
-- **Causal inference** — Understanding fraud dynamics
-- **Explainable escalation** — Natural language case summaries
+## 9. Deployment Strategy
+
+AegisAI is deployed using a modern, containerized infrastructure-as-code (IaC) approach.
+
+- **Infrastructure**: Terraform manages AWS resources (ECS, S3, DynamoDB, IAM).
+- **Containerization**: Docker-based builds for reproducible environments.
+- **Orchestration**: AWS ECS (Fargate) for serverless container management.
+- **CI/CD**: GitHub Actions for automated testing, linting, and deployment.
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed setup instructions.
+
+---
+
+## 10. Roadmap
+
+- **Near-Term**: Streaming ingestion via Kafka, real-time Grafana dashboards.
+- **Medium-Term**: Typing patterns and mouse dynamics for richer behavioral signals.
+- **Long-Term**: Federated learning for cross-institution fraud patterns and causal inference for fraud dynamics.
 
 ---
 
@@ -341,22 +172,15 @@ cd AegisAI
 # Create virtual environment
 python -m venv .venv
 source .venv/bin/activate  # Linux/Mac
-# .venv\Scripts\activate   # Windows
 
 # Install dependencies
-pip install -e ".[dev]"
+pip install -e ".[dev,ml]"
 ```
 
 ### Run the Demo
 
 ```bash
 python demo.py
-```
-
-### Run the Evaluation
-
-```bash
-python -m src.aegis_ai.evaluation.runner
 ```
 
 ### Run Tests
