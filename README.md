@@ -32,38 +32,73 @@ AegisAI solves this by prioritizing **Trust and Reliability** over raw accuracy,
 
 AegisAI follows a **multi-agent, parallel-execution architecture** where no single model has absolute authority.
 
-### High-Level Component Map
+### High-Level Layered Architecture
 
 ```mermaid
 graph TD
-    subgraph Input
-        A[Login Event] --> B[Input Validation]
+    subgraph API_LAYER[" API Layer "]
+        GW[FastAPI Gateway - POST /evaluate-login]
+        HLT[GET /health and GET /ready]
     end
 
-    subgraph "Reasoning Layer (Agents)"
-        B --> C[Detection Agent]
-        B --> D[Behavior Agent]
-        B --> E[Network Agent]
+    subgraph ORCH_LAYER[" Orchestration Layer "]
+        IV[Input Validation]
+        DF[DecisionFlow]
+        AR[AgentRouter - parallel fan-out]
     end
 
-    subgraph "Decision Orchestration"
-        C & D & E --> F[Confidence Agent]
-        F -- AI_ALLOWED --> G[Explanation Agent]
-        F -- HUMAN_REQUIRED --> H[Escalation Queue]
+    subgraph AGENT_LAYER[" Agent Layer "]
+        DA[Detection Agent - XGBoost]
+        BA[Behavior Agent - Isolation Forest]
+        NA[Network Agent - Graph Neural Network]
+        CA[Confidence Agent - Uncertainty Gating]
+        EA[Explanation Agent - LLM / Template]
     end
 
-    subgraph "Governance & Action"
-        G --> I[Policy Engine]
-        I --> J[Final Action]
-        H --> K[Human Override]
-        K --> J
+    subgraph POLICY_LAYER[" Policy and Governance Layer "]
+        PE[PolicyEngine - policy_rules.yaml]
+        EQ[Escalation Queue]
+        HO[Human Override - Review UI]
     end
 
-    subgraph "Audit & Monitoring"
-        J --> L[Unified Audit Trail]
-        L --> M[S3 Immutable Logs]
-        L --> N[DynamoDB Metadata]
+    subgraph STORAGE_LAYER[" Storage Layer "]
+        AL[Audit Logger - hash-chained JSONL]
+        S3[AWS S3 - Immutable WORM Logs]
+        DY[AWS DynamoDB - Metadata Index]
     end
+
+    subgraph MON_LAYER[" Monitoring Layer "]
+        PR[Prometheus]
+        GR[Grafana]
+        ML[MLflow - Model Registry]
+    end
+
+    subgraph INFRA_LAYER[" Infra Layer - Terraform and ECS Fargate "]
+        ECS[AWS ECS Fargate - Auto-scaling]
+        TF[Terraform IaC - ecs / iam / storage]
+    end
+
+    GW --> IV
+    IV --> DF
+    DF --> AR
+    AR --> DA
+    AR --> BA
+    AR --> NA
+    DA --> CA
+    BA --> CA
+    NA --> CA
+    CA -->|high confidence| EA
+    CA -->|low confidence| EQ
+    EA --> PE
+    EQ --> HO
+    HO --> PE
+    PE --> AL
+    AL --> S3
+    AL --> DY
+    PE -.->|metrics| PR
+    PR --> GR
+    EA -.->|artifacts| ML
+    INFRA_LAYER -.->|hosts| API_LAYER
 ```
 
 ### Agent Roles & Contracts
@@ -114,15 +149,36 @@ We track metrics that reflect real-world trust, not just model performance:
 
 ### Benchmarks
 
-We maintain a high-performance decision pipeline:
-- **Mean Latency**: < 1.0ms (Core Flow)
-- **Throughput**: > 2000 requests/sec (Single Node)
+We maintain a high-performance decision pipeline validated at **two levels**:
 
-Run the benchmarks locally:
+#### In-Process Core Flow (DecisionFlow)
+
+| Metric | Goal | Benchmark |
+|--------|------|-----------|
+| **Mean Latency** | < 1.0 ms | `benchmarks/latency_benchmark.py` |
+| **Throughput** | > 2000 req/s | `benchmarks/latency_benchmark.py` |
+
 ```bash
 export PYTHONPATH=$PYTHONPATH:$(pwd)/src
 python benchmarks/latency_benchmark.py
 ```
+
+#### HTTP API Load Test — 200 Concurrent Users (Locust)
+
+Exercises the full HTTP stack end-to-end: FastAPI gateway → DecisionFlow → PolicyEngine → AuditLogger.
+
+Under a 200-user concurrent load test on a single-node environment, AegisAI sustained ~309 RPS with 0% error rate and P95 latency of 500ms at ~92% CPU utilization, indicating compute-bound scaling behavior.
+
+| Metric | Result (200 Users) | How measured |
+| :--- | :--- | :--- |
+| **P50 HTTP Latency** | **300 ms** | Locust built-in stats |
+| **P95 HTTP Latency** | **500 ms** | Locust built-in stats |
+| **P99 HTTP Latency** | **590 ms** | Locust built-in stats |
+| **Steady State RPS** | **309.3** | Locust total RPS |
+| **Error Rate** | **0.00%** | Locust failure counter |
+| **Mean CPU (Local Docker)** | **92.5%** | `psutil` sampler |
+| **Peak CPU (Local Docker)** | **99.1%** | `psutil` sampler |
+
 
 **Monitoring Tools**:
 - **Prometheus/Grafana**: For real-time metrics (latency, throughput, escalation spikes).
@@ -131,12 +187,16 @@ python benchmarks/latency_benchmark.py
 
 ---
 
-## 7. Scaling Strategy
+## 7. Scaling Strategy & Considerations
 
-- **Audit Layer**: Uses **S3** for immutable storage (highly scalable) and **DynamoDB** for fast metadata lookups (low-latency, auto-scaling).
-- **Execution**: The `AgentRouter` supports parallel execution of agents via Python `asyncio`, allowing us to scale the number of agents without linear latency increases.
-- **Inference**: Deployment on **AWS ECS (Fargate)** ensures the compute layer scales horizontally based on request volume.
-- **Future**: Integration with **Kafka/Kinesis** for streaming event ingestion and real-time graph updates.
+AegisAI is built on a serverless, horizontally-scalable architecture designed to handle high-concurrency fraud detection.
+
+- **Audit Layer**: Uses **S3** for immutable storage (virtually infinite scale) and **DynamoDB** for fast metadata lookups (low-latency, auto-scaling).
+- **Compute**: Deployment on **AWS ECS (Fargate)** ensures the compute layer scales horizontally based on request volume.
+- **Parallel Agent Execution**: The `AgentRouter` executes independent agents in parallel, keeping end-to-end latency constant even as new agents are added.
+- **Key Considerations**: Includes data partitioning (Hot Key mitigation), resource contention management, and future streaming ingestion via Kafka/Kinesis.
+
+Detailed scaling strategies and bottleneck mitigations are documented in [docs/SCALING.md](docs/SCALING.md).
 
 ---
 

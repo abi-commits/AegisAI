@@ -9,6 +9,8 @@ from aegis_ai.orchestration.decision_context import (
     InputContext, DecisionContext, AgentOutputs, FinalDecision, EscalationCase
 )
 from aegis_ai.orchestration.agent_router import AgentRouter, RouterResult, AgentError
+from aegis_ai.governance.policies.engine import PolicyEngine
+from aegis_ai.governance.schemas import PolicyDecision
 
 logger = logging.getLogger(__name__)
 
@@ -16,8 +18,9 @@ logger = logging.getLogger(__name__)
 class DecisionFlow:
     """Orchestrates the complete decision lifecycle."""
     
-    def __init__(self, router: Optional[AgentRouter] = None):
+    def __init__(self, router: Optional[AgentRouter] = None, policy_engine: Optional[PolicyEngine] = None):
         self.router = router or AgentRouter()
+        self.policy_engine = policy_engine or PolicyEngine()
     
     def process(self, input_context: InputContext) -> DecisionContext:
         """Process a login event through the full decision pipeline."""
@@ -31,6 +34,7 @@ class DecisionFlow:
         agent_outputs = router_result.outputs
         context = context.with_agent_outputs(agent_outputs)
         
+        # Phase 1: Agent-based decision recommendation
         if agent_outputs.confidence.decision_permission == "HUMAN_REQUIRED":
             escalation = self._create_escalation(input_context, agent_outputs)
             context = context.with_escalation(escalation)
@@ -47,6 +51,81 @@ class DecisionFlow:
             decision = self._make_decision(input_context, agent_outputs)
             context = context.with_decision(decision)
         
+        # Phase 2: Policy Enforcement (Safety Gate)
+        # We evaluate the decision against the PolicyEngine
+        risk_score = self._calculate_risk_score(agent_outputs)
+        
+        policy_result = self.policy_engine.evaluate(
+            proposed_action=context.final_decision.action,
+            confidence_score=agent_outputs.confidence.final_confidence,
+            risk_score=risk_score,
+            disagreement_score=agent_outputs.confidence.disagreement_score,
+            user_id=input_context.user.user_id,
+            session_id=input_context.session.session_id
+        )
+        
+        if policy_result.decision != PolicyDecision.APPROVE:
+            logger.info(f"Policy override: {policy_result.decision.value} - {policy_result.veto_reason or policy_result.escalation_reason}")
+            context = self._apply_policy_override(context, input_context, agent_outputs, policy_result)
+        
+        return context
+
+    def _calculate_risk_score(self, agent_outputs: AgentOutputs) -> float:
+        """Calculate aggregate risk score for policy evaluation."""
+        # Align with ExplanationAgent weighting
+        weights = {
+            "detection": 0.45,
+            "behavioral": 0.30,
+            "network": 0.25,
+        }
+        
+        behavioral_risk = 1.0 - agent_outputs.behavioral.behavioral_match_score
+        
+        aggregate = (
+            weights["detection"] * agent_outputs.detection.risk_signal_score +
+            weights["behavioral"] * behavioral_risk +
+            weights["network"] * agent_outputs.network.network_risk_score
+        )
+        
+        return max(0.0, min(1.0, aggregate))
+
+    def _apply_policy_override(
+        self, context: DecisionContext, input_context: InputContext, 
+        agent_outputs: AgentOutputs, policy_result
+    ) -> DecisionContext:
+        """Override the decision based on policy results."""
+        if policy_result.decision == PolicyDecision.ESCALATE:
+            reason = "POLICY_OVERRIDE"
+            escalation = EscalationCase.create(
+                session_id=input_context.session.session_id,
+                user_id=input_context.user.user_id,
+                reason=reason,
+                agent_outputs=agent_outputs
+            )
+            context = context.with_escalation(escalation)
+            
+            decision = FinalDecision.create(
+                action="ESCALATE", decided_by="HUMAN_REQUIRED",
+                confidence_score=agent_outputs.confidence.final_confidence,
+                explanation=f"Policy Escalation: {policy_result.escalation_reason}",
+                session_id=input_context.session.session_id,
+                user_id=input_context.user.user_id,
+                agent_outputs=agent_outputs
+            )
+            context = context.with_decision(decision)
+            
+        elif policy_result.decision == PolicyDecision.VETO:
+            # Veto usually means the action is forbidden, force escalation as fallback
+            decision = FinalDecision.create(
+                action="ESCALATE", decided_by="HUMAN_REQUIRED",
+                confidence_score=agent_outputs.confidence.final_confidence,
+                explanation=f"Policy Veto: {policy_result.veto_reason}. Request blocked by safety policy.",
+                session_id=input_context.session.session_id,
+                user_id=input_context.user.user_id,
+                agent_outputs=agent_outputs
+            )
+            context = context.with_decision(decision)
+            
         return context
     
     def _handle_agent_failure(
